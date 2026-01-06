@@ -18,16 +18,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('home');
   const [location, setLocation] = useState<GeolocationPosition | null>(null);
   const [contacts, setContacts] = useState<EmergencyContact[]>([
-    {
-      id: '1', name: 'Mom', phone: '+1 234 567 8900', relation: 'Parent',
-      email: '',
-      isRegisteredUser: false
-    },
-    {
-      id: '2', name: 'Alex', phone: '+1 987 654 3210', relation: 'Friend',
-      email: '',
-      isRegisteredUser: false
-    }
+    { id: '1', name: 'Mom', phone: '+1 234 567 8900', relation: 'Parent' },
+    { id: '2', name: 'Alex', phone: '+1 987 654 3210', relation: 'Friend' }
   ]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
