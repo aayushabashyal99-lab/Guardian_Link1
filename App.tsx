@@ -53,12 +53,11 @@ const App: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const recognitionRef = useRef<any>(null);
 
-  // Form Inputs
+  // Unified Auth Form Inputs
   const [emailInput, setEmailInput] = useState('');
   const [passInput, setPassInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [phraseInput, setPhraseInput] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
   const [newPass, setNewPass] = useState('');
 
   // Guardian Form
@@ -131,15 +130,16 @@ const App: React.FC = () => {
   // --- Auth Actions ---
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (accounts.find(a => a.email === emailInput)) {
-      alert("Email already exists!");
+    const normalizedEmail = emailInput.trim().toLowerCase();
+    if (accounts.find(a => a.email.toLowerCase() === normalizedEmail)) {
+      alert("An account with this email already exists!");
       return;
     }
     const newUser: UserAccount = {
-      name: nameInput,
-      email: emailInput,
+      name: nameInput.trim(),
+      email: normalizedEmail,
       password: passInput,
-      secretPhrase: phraseInput || "Help Me"
+      secretPhrase: phraseInput.trim() || "Help Me"
     };
     setAccounts([...accounts, newUser]);
     setCurrentUser(newUser);
@@ -149,45 +149,58 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = accounts.find(a => a.email === emailInput && a.password === passInput);
+    const normalizedEmail = emailInput.trim().toLowerCase();
+    const found = accounts.find(a => a.email.toLowerCase() === normalizedEmail && a.password === passInput);
     if (found) {
       setCurrentUser(found);
       setIsLoggedIn(true);
       setView('home');
     } else {
-      alert("Invalid credentials!");
+      alert("Invalid email or password!");
     }
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = accounts.find(a => a.email === resetEmail);
+    const normalizedEmail = emailInput.trim().toLowerCase();
+    const found = accounts.find(a => a.email.toLowerCase() === normalizedEmail);
     if (found) {
+      // Keep the same email for the reset view
       setView('reset-password');
+      // Reset phrase input for the check
+      setPhraseInput('');
     } else {
-      alert("Account not found with this email.");
+      alert(`Account not found with email: ${emailInput}. Please check your spelling.`);
     }
   };
 
   const handleResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = accounts.find(a => a.email === resetEmail);
-    if (found && phraseInput === found.secretPhrase) {
-      const updatedAccounts = accounts.map(a => 
-        a.email === resetEmail ? { ...a, password: newPass } : a
-      );
-      setAccounts(updatedAccounts);
-      alert("Password reset successful! Please log in.");
-      setView('login');
+    const normalizedEmail = emailInput.trim().toLowerCase();
+    const foundIndex = accounts.findIndex(a => a.email.toLowerCase() === normalizedEmail);
+    
+    if (foundIndex !== -1) {
+      const found = accounts[foundIndex];
+      // Check phrase (case-insensitive for safety)
+      if (phraseInput.trim().toLowerCase() === found.secretPhrase.trim().toLowerCase()) {
+        const updatedAccounts = [...accounts];
+        updatedAccounts[foundIndex] = { ...found, password: newPass };
+        setAccounts(updatedAccounts);
+        alert("Password successfully updated! You can now log in.");
+        setView('login');
+      } else {
+        alert("The secret phrase you entered is incorrect.");
+      }
     } else {
-      alert("Secret phrase is incorrect!");
+      alert("Error: Account context lost. Please try again from the identifying step.");
+      setView('forgot-password');
     }
   };
 
   // --- SOS Logic ---
   const triggerSOS = () => {
     if (myPeople.length === 0) {
-      alert("Add guardians first in the 'Circle' tab!");
+      alert("Emergency! But you haven't added any guardians yet. Please go to the 'Circle' tab to add at least one contact.");
       setView('people');
       return;
     }
@@ -207,7 +220,7 @@ const App: React.FC = () => {
       const p = myPeople[0];
       const locStr = location ? `https://www.google.com/maps?q=${location.lat},${location.lng}` : 'Unknown';
       const subject = encodeURIComponent(`URGENT: ${currentUser?.name} NEEDS HELP!`);
-      const body = encodeURIComponent(`This is an SOS alert from GuardianSafe. ${currentUser?.name} is in danger.\nLive Location: ${locStr}`);
+      const body = encodeURIComponent(`This is an SOS alert from GuardianSafe. ${currentUser?.name} is in danger.\nLive Location: ${locStr}\n\nPlease check on them or call authorities immediately.`);
       window.location.href = `mailto:${p.email}?subject=${subject}&body=${body}`;
     }
   };
@@ -220,18 +233,18 @@ const App: React.FC = () => {
     setChatInput('');
     // Mock Response
     setTimeout(() => {
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'Guardian', text: "I'm coming! Stay on the line.", timestamp: new Date() }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'Guardian', text: "I've received your alert! I'm calling for help and heading your way. Stay safe!", timestamp: new Date() }]);
     }, 2000);
   };
 
-  // --- Views ---
+  // --- Render Auth Views ---
   const renderAuth = () => {
     if (view === 'login') return (
       <form onSubmit={handleLogin} className="space-y-4 w-full animate-in fade-in duration-500">
         <h2 className="text-3xl font-black text-center mb-8 text-slate-900">Sign In</h2>
-        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
+        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors shadow-sm" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
         <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors" value={passInput} onChange={e => setPassInput(e.target.value)} />
+          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors shadow-sm" value={passInput} onChange={e => setPassInput(e.target.value)} />
           <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
@@ -247,17 +260,17 @@ const App: React.FC = () => {
     if (view === 'register') return (
       <form onSubmit={handleRegister} className="space-y-4 w-full animate-in fade-in duration-500">
         <h2 className="text-3xl font-black text-center mb-8 text-slate-900">Join GuardianSafe</h2>
-        <input required placeholder="Full Name" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={nameInput} onChange={e => setNameInput(e.target.value)} />
-        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
+        <input required placeholder="Full Name" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={nameInput} onChange={e => setNameInput(e.target.value)} />
+        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
         <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={passInput} onChange={e => setPassInput(e.target.value)} />
+          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={passInput} onChange={e => setPassInput(e.target.value)} />
           <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
         </div>
         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-          <label className="text-[10px] font-bold uppercase text-blue-600">Secret Recovery Phrase</label>
-          <input required placeholder="e.g. Blue Phoenix" className="w-full bg-transparent outline-none text-xl font-bold mt-1 text-slate-900" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
+          <label className="text-[10px] font-bold uppercase text-blue-600">Emergency Voice Phrase</label>
+          <input required placeholder="e.g. Help Me" className="w-full bg-transparent outline-none text-xl font-bold mt-1 text-slate-900" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
         </div>
         <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Register</button>
         <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-600">Back to Login</button>
@@ -266,25 +279,31 @@ const App: React.FC = () => {
 
     if (view === 'forgot-password') return (
       <form onSubmit={handleForgotPassword} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-2xl font-black text-center mb-8 text-slate-900">Identify Account</h2>
-        <input required type="email" placeholder="Enter your email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
-        <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Next</button>
+        <h2 className="text-2xl font-black text-center mb-4 text-slate-900">Reset Your Password</h2>
+        <p className="text-xs text-slate-500 text-center mb-8">Enter the email associated with your account to find your safety profile.</p>
+        <input required type="email" placeholder="Account Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
+        <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Search Account</button>
         <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-600">Back to Login</button>
       </form>
     );
 
     if (view === 'reset-password') return (
       <form onSubmit={handleResetPassword} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-2xl font-black text-center mb-8 text-slate-900">Reset Password</h2>
-        <p className="text-xs text-slate-500 text-center mb-4">Enter your secret phrase to set a new password.</p>
-        <input required placeholder="Your Secret Phrase" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
-        <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="New Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={newPass} onChange={e => setNewPass(e.target.value)} />
-          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
+        <h2 className="text-2xl font-black text-center mb-4 text-slate-900">Security Verification</h2>
+        <p className="text-xs text-slate-500 text-center mb-8">Verify your identity using your Emergency Voice Phrase for account: <span className="font-bold text-blue-600">{emailInput}</span></p>
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Your Secret Phrase</label>
+          <input required placeholder="Enter Secret Phrase" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
+        </div>
+        <div className="space-y-1 relative">
+          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">New Password</label>
+          <input required type={showPassword ? "text" : "password"} placeholder="Set New Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 shadow-sm" value={newPass} onChange={e => setNewPass(e.target.value)} />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-10 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
         </div>
-        <button className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Update Password</button>
+        <button className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Complete Reset</button>
+        <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-600">Cancel</button>
       </form>
     );
 
@@ -319,7 +338,7 @@ const App: React.FC = () => {
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg text-white"><i className="fas fa-heart"></i></div>
             <h1 className="font-black text-xl tracking-tighter text-slate-900">GuardianSafe</h1>
           </div>
-          <button onClick={() => {setIsLoggedIn(false); setView('login')}} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"><i className="fas fa-power-off"></i></button>
+          <button onClick={() => {setIsLoggedIn(false); setView('login')}} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors shadow-sm"><i className="fas fa-power-off"></i></button>
         </header>
       )}
 
@@ -334,10 +353,10 @@ const App: React.FC = () => {
               <p className="text-red-100 font-bold opacity-80">Guardians notified of your location.</p>
             </div>
 
-            {/* Chat Box */}
-            <div className="flex-1 bg-white rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl min-h-[450px]">
+            {/* Emergency Chat Box */}
+            <div className="flex-1 bg-white rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl min-h-[450px] border border-red-200">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <span className="text-xs font-black uppercase tracking-widest text-slate-500">Guardian Response Chat</span>
+                <span className="text-xs font-black uppercase tracking-widest text-slate-500">Emergency Dispatch Chat</span>
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               </div>
               
@@ -348,7 +367,7 @@ const App: React.FC = () => {
                       m.sender === 'User' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-900 rounded-tl-none'
                     }`}>
                       <p className="text-[8px] uppercase tracking-widest opacity-50 mb-1">{m.sender}</p>
-                      <p>{m.text}</p>
+                      <p className="leading-relaxed">{m.text}</p>
                       <p className="text-[8px] opacity-30 mt-1 text-right">{m.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
                   </div>
@@ -356,7 +375,7 @@ const App: React.FC = () => {
               </div>
 
               <form onSubmit={handleSendMessage} className="p-4 bg-slate-50 flex gap-2 border-t border-slate-100">
-                <input placeholder="Type message..." className="flex-1 bg-white rounded-2xl p-4 text-slate-900 placeholder:text-slate-400 outline-none border border-slate-200 text-sm font-bold focus:border-blue-500" value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                <input placeholder="Message guardians..." className="flex-1 bg-white rounded-2xl p-4 text-slate-900 placeholder:text-slate-400 outline-none border border-slate-200 text-sm font-bold focus:border-blue-500 shadow-sm" value={chatInput} onChange={e => setChatInput(e.target.value)} />
                 <button type="submit" className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-all"><i className="fas fa-paper-plane"></i></button>
               </form>
             </div>
@@ -390,27 +409,31 @@ const App: React.FC = () => {
                       <div className={`absolute top-1 w-4 h-4 rounded-full transition-all bg-white shadow-sm ${isListening ? 'right-1' : 'left-1'}`}></div>
                     </div>
                   </button>
-                  <p className="text-[10px] text-slate-400 font-bold italic">Trigger Phrase: "{currentUser?.secretPhrase}"</p>
+                  <p className="text-[10px] text-slate-400 font-bold italic">Voice Trigger Phrase: "{currentUser?.secretPhrase}"</p>
                 </div>
               </div>
             )}
 
             {view === 'people' && (
               <div className="space-y-8 animate-in slide-in-from-right duration-500">
-                <h2 className="text-3xl font-black text-center text-slate-900">Guardian Circle</h2>
-                <form onSubmit={e => { e.preventDefault(); setMyPeople([...myPeople, { id: Date.now().toString(), name: gName, email: gEmail, phone: '' }]); setGName(''); setGEmail(''); }} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-xl">
-                  <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Add New Contact</h3>
-                  <input required placeholder="Name" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900" value={gName} onChange={e => setGName(e.target.value)} />
-                  <input required placeholder="Email" type="email" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900" value={gEmail} onChange={e => setGEmail(e.target.value)} />
-                  <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all">Add Guardian</button>
+                <div className="text-center">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Guardian Circle</h2>
+                  <p className="text-slate-500 font-medium">Add people you trust to be notified instantly.</p>
+                </div>
+                
+                <form onSubmit={e => { e.preventDefault(); setMyPeople([...myPeople, { id: Date.now().toString(), name: gName, email: gEmail.toLowerCase(), phone: '' }]); setGName(''); setGEmail(''); }} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-xl">
+                  <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">New Trusted Contact</h3>
+                  <input required placeholder="Contact Name" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900 shadow-sm" value={gName} onChange={e => setGName(e.target.value)} />
+                  <input required placeholder="Contact Email" type="email" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900 shadow-sm" value={gEmail} onChange={e => setGEmail(e.target.value)} />
+                  <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all">Save Guardian</button>
                 </form>
 
                 <div className="space-y-4">
-                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Saved Guardians</h3>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">My Saved Circle</h3>
                   {myPeople.map(p => (
                     <div key={p.id} className="bg-white p-6 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-xl font-bold">{p.name[0]}</div>
+                        <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-xl font-bold shadow-inner">{p.name[0]}</div>
                         <div>
                           <h4 className="font-black leading-none text-slate-900">{p.name}</h4>
                           <p className="text-xs text-slate-500 mt-1">{p.email}</p>
@@ -420,8 +443,8 @@ const App: React.FC = () => {
                     </div>
                   ))}
                   {myPeople.length === 0 && (
-                    <div className="text-center py-10 text-slate-400 font-medium bg-white/50 rounded-3xl border-2 border-dashed border-slate-200">
-                      No guardians added yet.
+                    <div className="text-center py-12 text-slate-400 font-medium bg-white/50 rounded-3xl border-2 border-dashed border-slate-200 italic px-6">
+                      No guardians added yet. Please add a trusted email to ensure your safety features work correctly.
                     </div>
                   )}
                 </div>
@@ -430,18 +453,18 @@ const App: React.FC = () => {
 
             {view === 'settings' && (
               <div className="space-y-8 animate-in slide-in-from-right duration-500">
-                <h2 className="text-3xl font-black text-center text-slate-900">Safety Setup</h2>
+                <h2 className="text-3xl font-black text-center text-slate-900 tracking-tighter">Safety Setup</h2>
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 space-y-8 shadow-xl text-center">
                   <div className="space-y-3">
                     <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Emergency Secret Phrase</label>
-                    <input className="w-full p-6 bg-slate-50 rounded-3xl text-3xl font-black text-center outline-none border border-slate-100 focus:border-blue-500 text-slate-900" value={currentUser?.secretPhrase} onChange={e => setCurrentUser(prev => prev ? {...prev, secretPhrase: e.target.value} : null)} />
-                    <p className="text-xs text-slate-400 font-medium">Say this phrase to trigger SOS instantly.</p>
+                    <input className="w-full p-6 bg-slate-50 rounded-3xl text-3xl font-black text-center outline-none border border-slate-100 focus:border-blue-500 text-slate-900 shadow-sm" value={currentUser?.secretPhrase} onChange={e => setCurrentUser(prev => prev ? {...prev, secretPhrase: e.target.value} : null)} />
+                    <p className="text-xs text-slate-400 font-medium px-4 leading-relaxed">Say this phrase out loud at any time while monitoring is active to trigger the SOS alarm and notify your circle.</p>
                   </div>
                   <div className="pt-6 border-t border-slate-100">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Display Name</label>
-                    <input className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-900 border border-slate-100 focus:border-blue-500 outline-none" value={currentUser?.name} onChange={e => setCurrentUser(prev => prev ? {...prev, name: e.target.value} : null)} />
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-900 border border-slate-100 focus:border-blue-500 outline-none shadow-sm" value={currentUser?.name} onChange={e => setCurrentUser(prev => prev ? {...prev, name: e.target.value} : null)} />
                   </div>
-                  <button onClick={() => setView('home')} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-2xl active:scale-95">Save Changes</button>
+                  <button onClick={() => setView('home')} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all">Update Settings</button>
                 </div>
               </div>
             )}
@@ -456,7 +479,7 @@ const App: React.FC = () => {
               <i className="fas fa-home text-2xl"></i>
               <span className="text-[10px] font-bold uppercase tracking-widest">Home</span>
             </button>
-            <button onClick={triggerSOS} className="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center -mt-12 border-8 border-slate-50 shadow-xl active:scale-90 transition-all">
+            <button onClick={triggerSOS} className="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center -mt-12 border-8 border-slate-50 shadow-xl active:scale-90 transition-all hover:bg-red-500">
               <i className="fas fa-bolt text-2xl"></i>
             </button>
             <button onClick={() => setView('people')} className={`flex flex-col items-center gap-1 transition-all ${view === 'people' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
