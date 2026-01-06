@@ -15,6 +15,7 @@
         color: #0f172a;
         margin: 0;
         padding: 0;
+        overflow-x: hidden;
       }
       .animate-pulse-slow {
         animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -24,7 +25,15 @@
         50% { opacity: .7; }
       }
       .custom-shadow {
-        box-shadow: 0 10px 50px -12px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.05);
+      }
+      /* Custom smooth transitions for inputs */
+      input {
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+      }
+      .glass-blur {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
       }
     </style>
     <script type="importmap">
