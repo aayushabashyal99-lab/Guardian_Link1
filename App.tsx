@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip, CartesianGrid, XAxis } from 'recharts';
 import { GoogleGenAI, Type } from '@google/genai';
 
 // --- Types ---
@@ -25,7 +24,71 @@ export interface AIAdvice {
   priority: 'low' | 'medium' | 'high' | 'critical';
 }
 
-// --- Components ---
+// --- Custom Components ---
+
+/**
+ * A custom SVG chart to replace recharts dependency for build stability.
+ */
+const CustomSafetyChart: React.FC<{ data: { val: number }[] }> = ({ data }) => {
+  const width = 300;
+  const height = 100;
+  const maxVal = 100;
+  
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (d.val / maxVal) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const areaPoints = `0,${height} ${points} ${width},${height}`;
+
+  return (
+    <div className="w-full h-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+        <defs>
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Horizontal grid lines */}
+        {[0, 25, 50, 75, 100].map((v) => (
+          <line
+            key={v}
+            x1="0"
+            y1={height - (v / 100) * height}
+            x2={width}
+            y2={height - (v / 100) * height}
+            stroke="#1e293b"
+            strokeWidth="0.5"
+          />
+        ))}
+        {/* The Area */}
+        <polyline
+          points={areaPoints}
+          fill="url(#chartGradient)"
+        />
+        {/* The Line */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Points on the line */}
+        {data.map((d, i) => {
+          const x = (i / (data.length - 1)) * width;
+          const y = height - (d.val / maxVal) * height;
+          return (
+            <circle key={i} cx={x} cy={y} r="2" fill="#3b82f6" />
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
 
 const EmergencyButton: React.FC<{ isActive: boolean; onToggle: () => void }> = ({ isActive, onToggle }) => (
   <div className="flex flex-col items-center justify-center p-6 space-y-6">
@@ -178,13 +241,7 @@ const StatusCharts: React.FC<{ userState: UserState }> = ({ userState }) => {
       </div>
       <div className="h-40">
         <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Safety Integrity History</div>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
-            <YAxis hide domain={[0, 100]} />
-            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', fontSize: '10px' }} />
-            <Area type="monotone" dataKey="val" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
+        <CustomSafetyChart data={chartData} />
       </div>
     </div>
   );
