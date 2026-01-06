@@ -1,139 +1,94 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 
-// --- Types ---
-export interface SafetyAlert {
+// --- Shared Types ---
+interface Contact {
   id: string;
-  type: 'emergency' | 'warning' | 'info';
-  timestamp: Date;
-  message: string;
-  location?: { lat: number; lng: number };
+  name: string;
+  phone: string;
+  isTrusted: boolean;
 }
 
-export interface UserState {
+interface Message {
+  id: string;
+  sender: 'Me' | 'Contact' | 'System' | 'AI';
+  text: string;
+  timestamp: Date;
+}
+
+interface UserState {
+  isLoggedIn: boolean;
   isSOSActive: boolean;
-  batteryLevel: number;
-  signalStrength: number;
+  name: string;
   location: { lat: number; lng: number } | null;
 }
 
-export interface AIAdvice {
-  summary: string;
-  steps: string[];
-  priority: 'low' | 'medium' | 'high' | 'critical';
-}
+// --- Mock Data ---
+const INITIAL_CONTACTS: Contact[] = [
+  { id: '1', name: 'Mom', phone: '+1 555-0101', isTrusted: true },
+  { id: '2', name: 'Dad', phone: '+1 555-0102', isTrusted: true },
+  { id: '3', name: 'Sister', phone: '+1 555-0103', isTrusted: true },
+];
 
 // --- Custom Components ---
 
-/**
- * A custom SVG chart to replace recharts dependency for build stability.
- */
-const CustomSafetyChart: React.FC<{ data: { val: number }[] }> = ({ data }) => {
-  const width = 300;
-  const height = 100;
-  const maxVal = 100;
-  
-  const points = data.map((d, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - (d.val / maxVal) * height;
-    return `${x},${y}`;
-  }).join(' ');
-
-  const areaPoints = `0,${height} ${points} ${width},${height}`;
-
-  return (
-    <div className="w-full h-full">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
-        <defs>
-          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {/* Horizontal grid lines */}
-        {[0, 25, 50, 75, 100].map((v) => (
-          <line
-            key={v}
-            x1="0"
-            y1={height - (v / 100) * height}
-            x2={width}
-            y2={height - (v / 100) * height}
-            stroke="#1e293b"
-            strokeWidth="0.5"
-          />
-        ))}
-        {/* The Area */}
-        <polyline
-          points={areaPoints}
-          fill="url(#chartGradient)"
-        />
-        {/* The Line */}
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#3b82f6"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Points on the line */}
-        {data.map((d, i) => {
-          const x = (i / (data.length - 1)) * width;
-          const y = height - (d.val / maxVal) * height;
-          return (
-            <circle key={i} cx={x} cy={y} r="2" fill="#3b82f6" />
-          );
-        })}
-      </svg>
-    </div>
-  );
-};
-
-const EmergencyButton: React.FC<{ isActive: boolean; onToggle: () => void }> = ({ isActive, onToggle }) => (
-  <div className="flex flex-col items-center justify-center p-6 space-y-6">
-    <div className="relative">
-      {isActive && (
-        <>
-          <div className="absolute inset-0 bg-red-600 rounded-full animate-ping opacity-25"></div>
-          <div className="absolute inset-0 bg-red-600 rounded-full animate-pulse opacity-10 blur-xl"></div>
-        </>
-      )}
-      <button
-        onClick={onToggle}
-        className={`relative z-10 w-48 h-48 rounded-full border-8 flex flex-col items-center justify-center transition-all duration-500 transform hover:scale-105 active:scale-95 shadow-2xl ${
-          isActive 
-            ? 'bg-red-600 border-red-800 text-white emergency-glow shadow-red-900/50' 
-            : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-red-500/50 hover:text-red-400'
-        }`}
-      >
-        <i className={`fas fa-power-off text-6xl mb-2 ${isActive ? 'animate-pulse' : ''}`}></i>
-        <span className="font-bold text-2xl tracking-widest">{isActive ? 'SOS ON' : 'SOS'}</span>
-      </button>
-    </div>
-    <p className={`text-sm text-center font-medium transition-colors ${isActive ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
-      {isActive 
-        ? 'Emergency services notified. Broadcasting GPS.' 
-        : 'Hold button for 3 seconds to trigger SOS'}
-    </p>
-  </div>
+const CustomChart: React.FC = () => (
+  <svg viewBox="0 0 300 60" className="w-full h-12 opacity-50">
+    <path d="M0 30 Q 50 10, 100 40 T 200 20 T 300 35" fill="none" stroke="#3b82f6" strokeWidth="2" />
+  </svg>
 );
 
-const AIAssistant: React.FC<{ isSOSActive: boolean; userState: UserState }> = ({ isSOSActive, userState }) => {
-  const [advice, setAdvice] = useState<AIAdvice | null>(null);
+const App: React.FC = () => {
+  const [view, setView] = useState<'auth' | 'home' | 'contacts' | 'chat'>('auth');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [user, setUser] = useState<UserState>({
+    isLoggedIn: false,
+    isSOSActive: false,
+    name: '',
+    location: null,
+  });
+  const [contacts] = useState<Contact[]>(INITIAL_CONTACTS);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [aiAdvice, setAiAdvice] = useState<{ summary: string, steps: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
-  
-  const generateEmergencyAdvice = async () => {
+
+  // --- Effects ---
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition((pos) => {
+        setUser(prev => ({ ...prev, location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }));
+      });
+    }
+  }, []);
+
+  // --- Actions ---
+  const handleAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    setUser(prev => ({ ...prev, isLoggedIn: true, name: 'Alex' }));
+    setView('home');
+  };
+
+  const triggerSOS = async () => {
+    setUser(prev => ({ ...prev, isSOSActive: true }));
+    const sosMsg: Message = {
+      id: Date.now().toString(),
+      sender: 'System',
+      text: "🚨 EMERGENCY ALERT: SOS triggered. Broadcasting location to all trusted contacts.",
+      timestamp: new Date()
+    };
+    setMessages(prev => [sosMsg, ...prev]);
+    
+    // Simulate sending to contacts
+    contacts.filter(c => c.isTrusted).forEach(c => {
+      console.log(`Sending SMS to ${c.name}: I need help! My location: ${user.location?.lat}, ${user.location?.lng}`);
+    });
+
+    // Get AI Advice
     setLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `SOS Beacon is ACTIVE. 
-        User Status: Battery ${userState.batteryLevel}%, Signal Strength ${userState.signalStrength}/5.
-        Location: ${userState.location ? `${userState.location.lat}, ${userState.location.lng}` : 'Unknown'}.
-        Please provide immediate safety triage steps. Response must be JSON.`;
-
+      const prompt = `User is in an EMERGENCY SOS situation. Battery is 80%. Signal is strong. Provide 3 immediate survival steps. JSON format only.`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
@@ -143,225 +98,243 @@ const AIAssistant: React.FC<{ isSOSActive: boolean; userState: UserState }> = ({
             type: Type.OBJECT,
             properties: {
               summary: { type: Type.STRING },
-              steps: { type: Type.ARRAY, items: { type: Type.STRING } },
-              priority: { type: Type.STRING }
+              steps: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ['summary', 'steps', 'priority']
+            required: ['summary', 'steps']
           }
         }
       });
-
-      const result = JSON.parse(response.text || '{}');
-      setAdvice(result);
-    } catch (error) {
-      console.error("AI Error:", error);
+      setAiAdvice(JSON.parse(response.text || '{}'));
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isSOSActive) generateEmergencyAdvice();
-    else setAdvice(null);
-  }, [isSOSActive]);
-
-  const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-    const userMsg = chatInput;
-    setChatHistory(prev => [...prev, { role: 'user', text: userMsg }]);
-    setChatInput('');
-    setLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const chat = ai.chats.create({ model: 'gemini-3-flash-preview' });
-      const response = await chat.sendMessage({ message: userMsg });
-      setChatHistory(prev => [...prev, { role: 'assistant', text: response.text || '' }]);
-    } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'assistant', text: 'Error contacting command center.' }]);
-    } finally {
-      setLoading(false);
-    }
+  const deactivateSOS = () => {
+    setUser(prev => ({ ...prev, isSOSActive: false }));
+    setAiAdvice(null);
   };
 
-  return (
-    <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-200">AI Safety Command</h2>
-        {isSOSActive && <span className="text-xs bg-red-500/20 text-red-500 px-2 py-1 rounded animate-pulse">TRIAGE ACTIVE</span>}
-      </div>
-      <div className="flex-1 space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-        {advice && (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-            <p className="text-sm font-bold text-red-400 mb-2">{advice.summary}</p>
-            <ul className="text-xs space-y-1 text-slate-300">
-              {advice.steps.map((s, i) => <li key={i}>• {s}</li>)}
-            </ul>
-          </div>
-        )}
-        {chatHistory.length === 0 && !advice && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <i className="fas fa-brain text-slate-700 text-4xl mb-4"></i>
-            <p className="text-slate-500 text-sm max-w-xs">AI Safety Command is monitoring. Ask for safety advice.</p>
-          </div>
-        )}
-        {chatHistory.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-blue-600' : 'bg-slate-800'}`}>{msg.text}</div>
-          </div>
-        ))}
-        {loading && <div className="text-slate-500 text-xs italic">AI is thinking...</div>}
-      </div>
-      <div className="relative mt-4">
-        <input 
-          className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 pr-10 text-sm focus:outline-none" 
-          value={chatInput} 
-          onChange={e => setChatInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Ask AI Safety Command..."
-        />
-        <button onClick={handleSendMessage} className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500"><i className="fas fa-paper-plane"></i></button>
-      </div>
-    </div>
-  );
-};
+  // --- Sub-Views ---
 
-const StatusCharts: React.FC<{ userState: UserState }> = ({ userState }) => {
-  const chartData = [{ val: 98 }, { val: 95 }, { val: 85 }, { val: 90 }, { val: 92 }, { val: 88 }, { val: 94 }];
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-          <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Battery</div>
-          <div className="text-2xl font-bold">{Math.round(userState.batteryLevel)}%</div>
-        </div>
-        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-          <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Signal</div>
-          <div className="text-2xl font-bold">{userState.signalStrength}G</div>
-        </div>
-      </div>
-      <div className="h-40">
-        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Safety Integrity History</div>
-        <CustomSafetyChart data={chartData} />
-      </div>
-    </div>
-  );
-};
-
-// --- Main App ---
-
-const App: React.FC = () => {
-  const [userState, setUserState] = useState<UserState>({
-    isSOSActive: false,
-    batteryLevel: 85,
-    signalStrength: 4,
-    location: null,
-  });
-
-  const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setUserState(prev => ({
-        ...prev,
-        batteryLevel: Math.max(0, prev.batteryLevel - 0.1),
-      }));
-    }, 10000);
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        setUserState(prev => ({
-          ...prev,
-          location: { lat: position.coords.latitude, lng: position.coords.longitude }
-        }));
-      });
-    }
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const toggleSOS = () => {
-    setUserState(prev => {
-      const newState = !prev.isSOSActive;
-      if (newState) {
-        const newAlert: SafetyAlert = {
-          id: Date.now().toString(),
-          type: 'emergency',
-          timestamp: new Date(),
-          message: "SOS Beacon Activated",
-          location: prev.location || undefined
-        };
-        setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
-      }
-      return { ...prev, isSOSActive: newState };
-    });
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center animate-pulse">
-                <i className="fas fa-shield-alt text-white"></i>
-              </div>
-              <span className="text-xl font-bold tracking-tight">SAFETY<span className="text-red-500">GUARDIAN</span></span>
+  if (!user.isLoggedIn) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-950">
+        <div className="w-full max-w-md glass-card rounded-3xl p-8 space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4 shadow-lg shadow-blue-500/30">
+              <i className="fas fa-shield-alt text-2xl text-white"></i>
             </div>
-            <div className="flex items-center gap-4 text-sm font-medium">
-              <div className="flex items-center gap-1 text-slate-400">
-                <i className="fas fa-signal"></i>
-                <span>{userState.signalStrength}G</span>
+            <h1 className="text-3xl font-bold text-white tracking-tight">SafetyGuardian</h1>
+            <p className="text-slate-400 mt-2">{isRegistering ? 'Create your secure account' : 'Welcome back, stay safe'}</p>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {isRegistering && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 uppercase ml-1">Full Name</label>
+                <input required className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" placeholder="John Doe" />
               </div>
-              <div className="flex items-center gap-1 text-slate-400">
-                <i className={`fas fa-battery-${userState.batteryLevel > 20 ? 'full' : 'quarter'}`}></i>
-                <span>{Math.round(userState.batteryLevel)}%</span>
-              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 uppercase ml-1">Email Address</label>
+              <input required type="email" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" placeholder="name@email.com" />
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 uppercase ml-1">Password</label>
+              <input required type="password" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" placeholder="••••••••" />
+            </div>
+            <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]">
+              {isRegistering ? 'Create Account' : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="text-center">
+            <button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+              {isRegistering ? 'Already have an account? Sign in' : "Don't have an account? Register"}
+            </button>
           </div>
         </div>
-      </nav>
+      </div>
+    );
+  }
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-4 space-y-8">
-            <section className="glass-card rounded-3xl p-4 overflow-hidden shadow-2xl">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest px-4 pt-4 mb-2">Emergency Hub</h2>
-              <EmergencyButton isActive={userState.isSOSActive} onToggle={toggleSOS} />
-            </section>
-            <section className="glass-card rounded-3xl p-6">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-widest mb-4">Device Status</h2>
-              <StatusCharts userState={userState} />
-            </section>
+  return (
+    <div className={`min-h-screen flex flex-col bg-slate-950 transition-colors duration-500 ${user.isSOSActive ? 'bg-red-950/20' : ''}`}>
+      {/* Header */}
+      <header className="p-4 flex items-center justify-between border-b border-white/5 backdrop-blur-md sticky top-0 z-40 bg-slate-950/50">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${user.isSOSActive ? 'bg-red-600' : 'bg-blue-600'}`}>
+            <i className="fas fa-shield-alt text-xs text-white"></i>
           </div>
-          <div className="lg:col-span-8 space-y-8">
-            <section className="glass-card rounded-3xl p-6 min-h-[400px]">
-              <AIAssistant isSOSActive={userState.isSOSActive} userState={userState} />
-            </section>
-            <section className="glass-card rounded-3xl p-6">
-              <h2 className="text-lg font-semibold text-slate-200 mb-6">Recent Activity</h2>
-              <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                {alerts.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 italic text-sm">No recent incidents. Safe environment confirmed.</div>
-                ) : (
-                  alerts.map(alert => (
-                    <div key={alert.id} className="flex gap-4 p-4 rounded-xl bg-slate-800/40 border border-slate-800 hover:border-slate-700 transition-all">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${alert.type === 'emergency' ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'}`}>
-                        <i className={`fas ${alert.type === 'emergency' ? 'fa-exclamation-triangle' : 'fa-info-circle'}`}></i>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <h4 className="font-medium text-slate-200 text-sm">{alert.message}</h4>
-                          <span className="text-[10px] text-slate-500">{alert.timestamp.toLocaleTimeString()}</span>
-                        </div>
-                      </div>
+          <span className="font-bold text-lg">Guardian</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 text-[10px] bg-slate-900 px-2 py-1 rounded-full border border-slate-800">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+            <span>LIVE GPS</span>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs border border-slate-700">
+            {user.name[0]}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto pb-24 p-4 space-y-6">
+        
+        {/* SOS OVERLAY / MODE */}
+        {user.isSOSActive && (
+          <div className="space-y-4 animate-in slide-in-from-top duration-500">
+            <div className="bg-red-600 rounded-2xl p-6 text-center shadow-2xl shadow-red-600/30">
+              <h2 className="text-2xl font-black text-white italic mb-1">SOS ACTIVE</h2>
+              <p className="text-red-100 text-sm opacity-80">Emergency services and contacts notified.</p>
+              <button 
+                onClick={deactivateSOS}
+                className="mt-4 bg-white text-red-600 px-6 py-2 rounded-full font-bold text-xs uppercase tracking-widest shadow-lg"
+              >
+                Cancel Alert
+              </button>
+            </div>
+
+            {aiAdvice && (
+              <div className="glass-card border-red-500/30 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                  <i className="fas fa-brain"></i>
+                  <span>AI SAFETY COMMAND</span>
+                </div>
+                <p className="text-sm text-slate-200">{aiAdvice.summary}</p>
+                <div className="space-y-2">
+                  {aiAdvice.steps.map((s, i) => (
+                    <div key={i} className="flex gap-3 items-center text-xs bg-red-500/5 p-2 rounded-lg border border-red-500/10">
+                      <span className="w-5 h-5 flex-shrink-0 bg-red-600 rounded-full flex items-center justify-center font-bold">{i+1}</span>
+                      <span className="text-slate-300">{s}</span>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Home View */}
+        {view === 'home' && !user.isSOSActive && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={triggerSOS} className="col-span-2 h-40 rounded-3xl bg-slate-900 border-2 border-slate-800 flex flex-col items-center justify-center group active:scale-[0.97] transition-all hover:border-red-600/50">
+                <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:bg-red-600 transition-colors">
+                  <i className="fas fa-power-off text-2xl text-slate-400 group-hover:text-white"></i>
+                </div>
+                <span className="text-lg font-bold text-slate-300 group-hover:text-white uppercase tracking-widest">Emergency SOS</span>
+              </button>
+
+              <button className="h-28 rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-blue-500/50">
+                <i className="fas fa-street-view text-blue-500 text-xl"></i>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">Check-in</p>
+                  <p className="text-[10px] text-slate-500">Update status</p>
+                </div>
+              </button>
+
+              <button onClick={() => setView('contacts')} className="h-28 rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col justify-between hover:border-blue-500/50">
+                <i className="fas fa-user-friends text-green-500 text-xl"></i>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white">Contacts</p>
+                  <p className="text-[10px] text-slate-500">Trusted circle</p>
+                </div>
+              </button>
+            </div>
+
+            <section className="glass-card rounded-2xl p-5 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-bold text-slate-400">SAFETY INTEGRITY</h3>
+                <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Stable</span>
+              </div>
+              <CustomChart />
+              <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                <span>08:00 AM</span>
+                <span>NOW</span>
               </div>
             </section>
+          </>
+        )}
+
+        {/* Contacts View */}
+        {view === 'contacts' && (
+          <div className="space-y-4 animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xl font-bold">Trusted Contacts</h2>
+              <button className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <i className="fas fa-plus text-xs"></i>
+              </button>
+            </div>
+            {contacts.map(contact => (
+              <div key={contact.id} className="glass-card p-4 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700">
+                    <i className="fas fa-user text-slate-500"></i>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm">{contact.name}</h4>
+                    <p className="text-xs text-slate-500">{contact.phone}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                   <button className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500">
+                    <i className="fas fa-comment"></i>
+                   </button>
+                </div>
+              </div>
+            ))}
+            <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs text-blue-300 text-center italic">
+              Trusted contacts receive your location automatically during an SOS event.
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Recent Activity List (Bottom of Main) */}
+        {view === 'home' && messages.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Live Activity</h3>
+            {messages.map(m => (
+              <div key={m.id} className="p-3 bg-slate-900/40 rounded-xl border border-white/5 text-xs animate-in slide-in-from-bottom-2">
+                <div className="flex justify-between mb-1">
+                  <span className="font-bold text-blue-400">{m.sender}</span>
+                  <span className="opacity-40">{m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">{m.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
       </main>
+
+      {/* Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/80 backdrop-blur-xl border-t border-white/5 flex justify-around items-center z-50">
+        <button 
+          onClick={() => setView('home')} 
+          className={`flex flex-col items-center gap-1 transition-colors ${view === 'home' ? 'text-blue-500' : 'text-slate-500'}`}
+        >
+          <i className="fas fa-home text-lg"></i>
+          <span className="text-[10px] font-bold">HOME</span>
+        </button>
+        <button 
+          onClick={triggerSOS}
+          className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center -mt-10 shadow-xl shadow-red-600/40 border-4 border-slate-950 active:scale-90 transition-transform"
+        >
+          <i className="fas fa-exclamation-triangle text-xl text-white"></i>
+        </button>
+        <button 
+          onClick={() => setView('contacts')}
+          className={`flex flex-col items-center gap-1 transition-colors ${view === 'contacts' ? 'text-blue-500' : 'text-slate-500'}`}
+        >
+          <i className="fas fa-users text-lg"></i>
+          <span className="text-[10px] font-bold">CIRCLE</span>
+        </button>
+      </nav>
     </div>
   );
 };
