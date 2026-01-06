@@ -17,45 +17,56 @@ interface User {
   isLoggedIn: boolean;
 }
 
-interface SentLog {
+interface ChatMessage {
   id: string;
-  to: string;
-  email: string;
-  type: 'Email' | 'SMS';
-  status: 'READY' | 'SENDING...' | 'SENT';
+  sender: 'User' | 'Guardian' | 'AI';
+  text: string;
+  timestamp: Date;
 }
 
 const App: React.FC = () => {
-  // --- State ---
+  // --- Persistent State ---
   const [view, setView] = useState<'login' | 'register' | 'home' | 'people' | 'settings'>('login');
   const [user, setUser] = useState<User>(() => {
-    const saved = localStorage.getItem('guardian_user');
-    return saved ? JSON.parse(saved) : { name: '', email: '', secretPhrase: 'Help Me Now', isLoggedIn: false };
+    const saved = localStorage.getItem('guardian_user_v2');
+    return saved ? JSON.parse(saved) : { name: '', email: '', secretPhrase: 'Help Me', isLoggedIn: false };
   });
+  
   const [myPeople, setMyPeople] = useState<TrustedPerson[]>(() => {
-    const saved = localStorage.getItem('guardian_people');
+    const saved = localStorage.getItem('guardian_people_v2');
     return saved ? JSON.parse(saved) : [];
   });
   
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const saved = localStorage.getItem('guardian_chat_v2');
+    return saved ? JSON.parse(saved).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })) : [];
+  });
+
   const [isEmergency, setIsEmergency] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [voiceInput, setVoiceInput] = useState('');
-  const [logs, setLogs] = useState<SentLog[]>([]);
-  const [aiAdvice, setAiAdvice] = useState<string[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
   const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [chatInput, setChatInput] = useState('');
 
   // Form Inputs
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
 
-  // Save data locally
+  // Save data to LocalStorage on every change
   useEffect(() => {
-    localStorage.setItem('guardian_user', JSON.stringify(user));
-    localStorage.setItem('guardian_people', JSON.stringify(myPeople));
-  }, [user, myPeople]);
+    localStorage.setItem('guardian_user_v2', JSON.stringify(user));
+  }, [user]);
 
-  // Track location
+  useEffect(() => {
+    localStorage.setItem('guardian_people_v2', JSON.stringify(myPeople));
+  }, [myPeople]);
+
+  useEffect(() => {
+    localStorage.setItem('guardian_chat_v2', JSON.stringify(messages));
+  }, [messages]);
+
+  // Track location for SOS
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -65,111 +76,149 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Phrase Listener Logic
-  useEffect(() => {
-    if (isListening && voiceInput.toLowerCase().includes(user.secretPhrase.toLowerCase())) {
-      triggerSOS();
-      setVoiceInput('');
-    }
-  }, [voiceInput, isListening]);
-
-  // --- Functions ---
-  const handleAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    setUser({ ...user, isLoggedIn: true });
-    setView('home');
-  };
-
-  const saveGuardian = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) return alert("Type a name first!");
-    const newPerson: TrustedPerson = { id: Date.now().toString(), name: formName, email: formEmail, phone: formPhone };
-    setMyPeople([...myPeople, newPerson]);
-    setFormName(''); setFormEmail(''); setFormPhone('');
-    alert("Guardian saved to your circle!");
-  };
-
-  const sendActualEmail = (person: TrustedPerson) => {
-    const locStr = location ? `\n\nMy location: https://www.google.com/maps?q=${location.lat},${location.lng}` : '';
-    const subject = encodeURIComponent(`EMERGENCY: ${user.name} needs help!`);
-    const body = encodeURIComponent(`This is an emergency alert from GuardianSafe.\n\n${user.name} is in danger and has requested your immediate help!${locStr}\n\nPlease check on them immediately.`);
-    window.location.href = `mailto:${person.email}?subject=${subject}&body=${body}`;
-    
-    // Update log status locally
-    setLogs(prev => prev.map(l => l.email === person.email ? { ...l, status: 'SENT' } : l));
-  };
-
-  const triggerSOS = async () => {
+  // --- SOS Logic ---
+  const triggerSOS = () => {
     if (myPeople.length === 0) {
-      alert("You have no guardians! Go to 'People' and add an email for your parent or friend first.");
+      alert("Please add at least one guardian in 'People' tab before using SOS!");
       setView('people');
       return;
     }
-
     setIsEmergency(true);
     setIsListening(false);
-
-    const initialLogs: SentLog[] = myPeople.flatMap(p => {
-      const pLogs: SentLog[] = [];
-      if (p.email) pLogs.push({ id: `e-${p.id}`, to: p.name, email: p.email, type: 'Email', status: 'READY' });
-      return pLogs;
-    });
-    setLogs(initialLogs);
-
-    // Get AI Advice
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `EMERGENCY! User ${user.name} is in danger. 
-      Location: ${location ? `${location.lat}, ${location.lng}` : 'Unknown'}. 
-      Give 3 short, easy safety tips for a child or senior. 
-      JSON array: ["tip1", "tip2", "tip3"]`;
-      
-      const res = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { responseMimeType: 'application/json' }
-      });
-      setAiAdvice(JSON.parse(res.text || '[]'));
-    } catch {
-      setAiAdvice(["Move to a well-lit area", "Shout for help loudly", "Stay on this screen"]);
-    }
+    
+    // Auto-add an AI message to guide the user
+    const aiMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'AI',
+      text: "SOS Active. I am monitoring your location. Please click 'Send Email' below to alert your guardians immediately.",
+      timestamp: new Date()
+    };
+    setMessages([aiMsg]);
   };
+
+  const sendEmailToGuardian = (person: TrustedPerson) => {
+    const locStr = location ? `\n\nLive Location: https://www.google.com/maps?q=${location.lat},${location.lng}` : '\n\nLocation: Not shared.';
+    const subject = encodeURIComponent(`URGENT: ${user.name} needs help!`);
+    const body = encodeURIComponent(
+      `HELLO ${person.name.toUpperCase()},\n\n` +
+      `This is an EMERGENCY ALERT from GuardianSafe.\n` +
+      `${user.name} has triggered their SOS alarm and needs help right now.` +
+      `${locStr}\n\n` +
+      `Please contact them immediately.`
+    );
+    
+    // Standard mailto link - this is the only free way in a browser to send an email from the user's device.
+    window.location.href = `mailto:${person.email}?subject=${subject}&body=${body}`;
+    
+    const confirmationMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'AI',
+      text: `Alert sent to ${person.name}. Keep talking here.`,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, confirmationMsg]);
+  };
+
+  // Fix: Added missing saveGuardian function to handle adding new guardians to the list
+  const saveGuardian = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim() || !formEmail.trim()) return;
+
+    const newPerson: TrustedPerson = {
+      id: Date.now().toString(),
+      name: formName,
+      email: formEmail,
+      phone: formPhone,
+    };
+
+    setMyPeople(prev => [...prev, newPerson]);
+    setFormName('');
+    setFormEmail('');
+    setFormPhone('');
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const newMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'User',
+      text: chatInput,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, newMsg]);
+    setChatInput('');
+
+    // Simulate Guardian/AI reply
+    setTimeout(() => {
+      const reply: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'Guardian',
+        text: "I received your alert! Where are you? Stay calm.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, reply]);
+    }, 2000);
+  };
+
+  // --- View Components ---
 
   if (!user.isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 p-6 flex flex-col items-center justify-center font-sans">
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center">
-            <div className="w-20 h-20 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-2xl text-white text-3xl">
+            <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 shadow-2xl text-white text-4xl">
               <i className="fas fa-shield-heart"></i>
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight">GuardianSafe</h1>
-            <p className="text-slate-500 font-bold">The app that actually keeps you safe.</p>
+            <h1 className="text-4xl font-black tracking-tighter">GuardianSafe</h1>
+            <p className="text-slate-500 font-bold mt-2">Safety that stays with you.</p>
           </div>
 
-          <div className="bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100">
-            {view === 'login' ? (
-              <form onSubmit={handleAuth} className="space-y-4">
-                <input required type="email" placeholder="Email Address" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" />
-                <input required type="password" placeholder="Password" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" />
-                <button className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest shadow-lg active:scale-95 transition-all">Sign In</button>
-                <button type="button" onClick={() => setView('register')} className="w-full text-center text-xs font-black text-blue-600 mt-4 uppercase tracking-widest">Create New Account</button>
-              </form>
-            ) : (
-              <form onSubmit={handleAuth} className="space-y-4">
-                <input required placeholder="Your Name" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" value={user.name} onChange={e => setUser({...user, name: e.target.value})} />
-                <input required type="email" placeholder="Email Address" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" />
-                
-                <div className="p-5 bg-blue-50 rounded-3xl border-2 border-blue-100 space-y-2">
-                  <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest block">My Secret Phrase (HELP WORD)</label>
-                  <input required placeholder="e.g. Apples" className="w-full bg-transparent border-none p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0" value={user.secretPhrase} onChange={e => setUser({...user, secretPhrase: e.target.value})} />
-                  <p className="text-[10px] text-slate-400 italic">If you say this word, the alarm starts.</p>
-                </div>
+          <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-slate-100">
+            <form onSubmit={(e) => { e.preventDefault(); setUser({...user, isLoggedIn: true}); setView('home'); }} className="space-y-5">
+              {view === 'register' && (
+                <input required placeholder="Your Full Name" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" value={user.name} onChange={e => setUser({...user, name: e.target.value})} />
+              )}
+              <input required type="email" placeholder="Email Address" className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" />
+              
+              <div className="relative">
+                <input 
+                  required 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="Password" 
+                  className="w-full p-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-900" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
+                >
+                  <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                </button>
+              </div>
 
-                <button className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest shadow-lg active:scale-95 transition-all">Register Now</button>
-                <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs font-black text-slate-400 mt-4 uppercase tracking-widest">Back to Login</button>
-              </form>
-            )}
+              {view === 'register' && (
+                <div className="p-5 bg-blue-50 rounded-3xl border-2 border-blue-100 space-y-2">
+                  <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest block">Emergency Secret Phrase</label>
+                  <input required placeholder="e.g. Save Me" className="w-full bg-transparent border-none p-0 text-2xl font-black text-slate-900 outline-none focus:ring-0" value={user.secretPhrase} onChange={e => setUser({...user, secretPhrase: e.target.value})} />
+                  <p className="text-[10px] text-slate-400 italic">Say this or type it to trigger SOS instantly.</p>
+                </div>
+              )}
+
+              <button className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+                {view === 'login' ? 'Sign In' : 'Create Account'}
+              </button>
+              
+              <button 
+                type="button" 
+                onClick={() => setView(view === 'login' ? 'register' : 'login')} 
+                className="w-full text-center text-xs font-black text-slate-400 uppercase tracking-widest"
+              >
+                {view === 'login' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              </button>
+            </form>
           </div>
         </div>
       </div>
@@ -177,7 +226,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-1000 ${isEmergency ? 'bg-red-600' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`min-h-screen flex flex-col transition-colors duration-1000 ${isEmergency ? 'bg-red-600' : 'bg-slate-50'}`}>
       
       {!isEmergency && (
         <header className="p-6 bg-white flex justify-between items-center shadow-sm sticky top-0 z-50">
@@ -187,7 +236,7 @@ const App: React.FC = () => {
             </div>
             <h1 className="font-black text-xl tracking-tighter">GuardianSafe</h1>
           </div>
-          <button onClick={() => setUser({...user, isLoggedIn: false})} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+          <button onClick={() => { setUser({...user, isLoggedIn: false}); setView('login'); }} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
             <i className="fas fa-power-off text-xs"></i>
           </button>
         </header>
@@ -195,58 +244,68 @@ const App: React.FC = () => {
 
       <main className="flex-1 p-6 pb-40 max-w-lg mx-auto w-full">
         {isEmergency ? (
-          <div className="h-full flex flex-col justify-center items-center text-white text-center space-y-8 animate-in zoom-in duration-500">
-            <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center text-red-600 text-5xl shadow-2xl animate-pulse">
-              <i className="fas fa-exclamation-triangle"></i>
-            </div>
-            
-            <div className="space-y-1">
-              <h2 className="text-4xl font-black uppercase italic tracking-tighter">Emergency Mode</h2>
-              <p className="text-red-100 font-bold opacity-80">Click the buttons below to actually send emails!</p>
+          <div className="h-full flex flex-col space-y-6 animate-in fade-in zoom-in duration-500">
+            <div className="text-center text-white pt-4">
+              <h2 className="text-4xl font-black uppercase italic tracking-tighter">Emergency Active</h2>
+              <p className="text-red-100 font-bold opacity-80 mt-1">Alerting guardians and recording location.</p>
             </div>
 
-            <div className="w-full space-y-4">
-              {logs.map((log, idx) => {
-                const person = myPeople.find(p => p.email === log.email);
-                return (
-                  <div key={log.id} className="bg-white rounded-[2rem] p-5 shadow-2xl text-slate-900 flex items-center justify-between">
-                    <div className="text-left">
-                      <p className="text-sm font-black">{log.to}</p>
-                      <p className="text-[10px] font-bold text-slate-400">{log.email}</p>
-                    </div>
-                    {log.status === 'SENT' ? (
-                      <span className="bg-green-100 text-green-600 text-[10px] font-black px-4 py-2 rounded-full border border-green-200 uppercase tracking-widest">
-                        <i className="fas fa-check-circle mr-1"></i> Sent
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => person && sendActualEmail(person)}
-                        className="bg-red-600 text-white text-[10px] font-black px-4 py-3 rounded-2xl shadow-lg active:scale-95 uppercase tracking-widest"
-                      >
-                        Click to Email Now
-                      </button>
-                    )}
+            {/* Guardian List & Email Buttons */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-white/60 uppercase tracking-widest ml-4">Step 1: Send Alert Mails</p>
+              {myPeople.map(p => (
+                <div key={p.id} className="bg-white p-4 rounded-3xl flex items-center justify-between shadow-2xl">
+                  <div>
+                    <p className="text-sm font-black text-slate-900">{p.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{p.email}</p>
                   </div>
-                );
-              })}
+                  <button 
+                    onClick={() => sendEmailToGuardian(p)}
+                    className="bg-red-600 text-white text-[10px] font-black px-5 py-3 rounded-2xl uppercase tracking-widest shadow-lg active:scale-95"
+                  >
+                    Send Email
+                  </button>
+                </div>
+              ))}
             </div>
 
-            {aiAdvice.length > 0 && (
-              <div className="w-full bg-white text-red-600 rounded-[2.5rem] p-6 shadow-2xl space-y-4">
-                <p className="text-[10px] font-black uppercase border-b border-red-50 pb-2 tracking-widest">Immediate Safety Steps</p>
-                <div className="space-y-3">
-                  {aiAdvice.map((tip, i) => (
-                    <div key={i} className="flex gap-4 items-center text-left">
-                      <div className="w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">{i+1}</div>
-                      <p className="text-sm font-black leading-tight">{tip}</p>
-                    </div>
-                  ))}
-                </div>
+            {/* Chat Box */}
+            <div className="flex-1 bg-white/10 backdrop-blur-lg rounded-[2.5rem] border border-white/20 flex flex-col overflow-hidden min-h-[350px]">
+              <div className="p-4 border-b border-white/10 flex justify-between items-center">
+                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Step 2: Guardian Chat</span>
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
               </div>
-            )}
+              
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                {messages.map(m => (
+                  <div key={m.id} className={`flex ${m.sender === 'User' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] p-4 rounded-[1.5rem] shadow-md text-sm font-bold ${
+                      m.sender === 'User' ? 'bg-blue-600 text-white rounded-tr-none' : 
+                      m.sender === 'AI' ? 'bg-black/40 text-white/90 rounded-tl-none italic' :
+                      'bg-white text-slate-900 rounded-tl-none'
+                    }`}>
+                      <p>{m.text}</p>
+                      <p className="text-[8px] opacity-40 mt-1 text-right">{m.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-            <button onClick={() => setIsEmergency(false)} className="bg-white text-red-600 px-12 py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl active:scale-95 text-sm">
-              I am safe now
+              <form onSubmit={handleSendMessage} className="p-4 bg-black/20 flex gap-2">
+                <input 
+                  placeholder="Type message to guardian..." 
+                  className="flex-1 bg-white/10 rounded-2xl p-4 text-white placeholder:text-white/40 outline-none border border-white/10 text-sm font-bold" 
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                />
+                <button className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-red-600 shadow-xl">
+                  <i className="fas fa-paper-plane"></i>
+                </button>
+              </form>
+            </div>
+
+            <button onClick={() => setIsEmergency(false)} className="w-full bg-white text-red-600 font-black py-5 rounded-[2rem] shadow-2xl active:scale-95 uppercase tracking-widest">
+              Stop SOS - I am safe
             </button>
           </div>
         ) : (
@@ -254,37 +313,28 @@ const App: React.FC = () => {
             {view === 'home' && (
               <div className="space-y-10 py-10 animate-in fade-in duration-500">
                 <div className="text-center">
-                  <h2 className="text-4xl font-black text-slate-900 leading-none">Safe & Secure</h2>
-                  <p className="text-slate-500 font-bold mt-2 px-10">Press the SOS if you are in danger.</p>
+                  <h2 className="text-4xl font-black text-slate-900 tracking-tighter">Hello, {user.name || 'Friend'}</h2>
+                  <p className="text-slate-500 font-bold mt-2">Guardians are ready to help you.</p>
                 </div>
 
-                <div className="flex justify-center py-4">
-                  <button onClick={triggerSOS} className="w-72 h-72 rounded-full bg-white border-[20px] border-slate-100 flex flex-col items-center justify-center shadow-[0_25px_60px_rgba(0,0,0,0.1)] active:scale-95 group hover:border-red-50">
+                <div className="flex justify-center">
+                  <button onClick={triggerSOS} className="w-72 h-72 rounded-full bg-white border-[20px] border-slate-100 flex flex-col items-center justify-center shadow-2xl active:scale-95 group transition-all hover:border-red-50">
                     <i className="fas fa-bolt text-7xl text-red-600 mb-4 transition-transform group-hover:scale-110"></i>
-                    <span className="text-sm font-black text-slate-400 tracking-[0.2em] uppercase">Emergency SOS</span>
+                    <span className="text-sm font-black text-slate-400 tracking-[0.2em] uppercase">Trigger SOS</span>
                   </button>
                 </div>
 
-                <div className="max-w-xs mx-auto space-y-4">
-                  <div className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col gap-3 ${isListening ? 'bg-blue-600 border-blue-400 text-white shadow-2xl scale-105' : 'bg-white border-slate-200 text-slate-500'}`}>
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                        <i className={`fas ${isListening ? 'fa-microphone animate-pulse' : 'fa-microphone-slash'} text-xl`}></i>
-                        <p className="text-sm font-black uppercase tracking-widest">{isListening ? 'Listening...' : 'Voice Off'}</p>
-                       </div>
-                       <button onClick={() => setIsListening(!isListening)} className={`w-12 h-6 rounded-full relative transition-colors ${isListening ? 'bg-white/30' : 'bg-slate-200'}`}>
-                          <div className={`absolute top-1 w-4 h-4 rounded-full transition-all ${isListening ? 'right-1 bg-white' : 'left-1 bg-slate-400'}`}></div>
-                       </button>
+                <div className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-100 shadow-xl flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
+                      <i className="fas fa-users text-xl"></i>
                     </div>
-                    {isListening && (
-                      <input 
-                        placeholder={`Type "${user.secretPhrase}" to test`}
-                        className="w-full bg-white/10 rounded-xl p-3 text-xs border border-white/20 outline-none text-white placeholder:text-white/50"
-                        value={voiceInput}
-                        onChange={(e) => setVoiceInput(e.target.value)}
-                      />
-                    )}
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Guardians</p>
+                      <p className="text-lg font-black">{myPeople.length} People Watching</p>
+                    </div>
                   </div>
+                  <button onClick={() => setView('people')} className="text-blue-600 font-black text-xs uppercase underline">Manage</button>
                 </div>
               </div>
             )}
@@ -293,35 +343,33 @@ const App: React.FC = () => {
               <div className="space-y-8 py-4 animate-in slide-in-from-right duration-500">
                 <div className="text-center">
                   <h2 className="text-3xl font-black text-slate-900">My People</h2>
-                  <p className="text-slate-500 font-bold">Add the people who care about you.</p>
+                  <p className="text-slate-500 font-bold">These people will receive your SOS emails.</p>
                 </div>
 
-                <form onSubmit={saveGuardian} className="bg-white p-8 rounded-[3rem] border-2 border-slate-50 space-y-5 shadow-xl">
-                  <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest ml-2">New Guardian</h3>
-                  <div className="space-y-4">
-                    <input required placeholder="Name (e.g. Dad)" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formName} onChange={e => setFormName(e.target.value)} />
-                    <input required placeholder="Email (They will get your SOS)" type="email" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
-                    <input placeholder="Phone Number" type="tel" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
-                  </div>
-                  <button type="submit" className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-sm active:scale-95">Add to My Circle</button>
+                <form onSubmit={saveGuardian} className="bg-white p-8 rounded-[3rem] border-2 border-slate-100 space-y-4 shadow-xl">
+                  <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-2">Add New Guardian</h3>
+                  <input required placeholder="Full Name (e.g. Dad)" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formName} onChange={e => setFormName(e.target.value)} />
+                  <input required placeholder="Email Address" type="email" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+                  <input placeholder="Phone Number" type="tel" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+                  <button type="submit" className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase tracking-widest text-sm active:scale-95">Save Guardian</button>
                 </form>
 
-                <div className="space-y-4 pb-10">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Guardians in Circle</h3>
+                <div className="space-y-3 pb-10">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Saved Circle</h3>
                   {myPeople.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 text-slate-400 font-bold px-10">
-                      Empty. Add someone so we can notify them in danger!
+                    <div className="text-center py-10 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 text-slate-400 font-bold px-10">
+                      Empty. Add a guardian email to enable SOS.
                     </div>
                   ) : (
                     myPeople.map(p => (
                       <div key={p.id} className="bg-white p-6 rounded-[2rem] flex items-center justify-between border-2 border-slate-50 shadow-md">
                         <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-600/20">
+                          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl">
                             {p.name[0]}
                           </div>
                           <div>
-                            <h4 className="font-black text-slate-900 text-lg leading-tight">{p.name}</h4>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{p.email}</p>
+                            <h4 className="font-black text-slate-900 leading-none">{p.name}</h4>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{p.email}</p>
                           </div>
                         </div>
                         <button onClick={() => setMyPeople(myPeople.filter(x => x.id !== p.id))} className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
@@ -337,32 +385,30 @@ const App: React.FC = () => {
             {view === 'settings' && (
               <div className="space-y-8 py-4 animate-in slide-in-from-right duration-500">
                 <div className="text-center">
-                  <h2 className="text-3xl font-black text-slate-900">Safety Settings</h2>
-                  <p className="text-slate-500 font-bold">Customize how the app works.</p>
+                  <h2 className="text-3xl font-black text-slate-900">App Setup</h2>
+                  <p className="text-slate-500 font-bold">Manage your profile and safety words.</p>
                 </div>
 
                 <div className="bg-white p-8 rounded-[3rem] border-2 border-slate-50 space-y-8 shadow-xl">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-2">Your Secret Help Word</label>
+                    <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-2">My SOS Phrase</label>
                     <input 
-                      placeholder="e.g. Apples" 
+                      placeholder="e.g. Save Me" 
                       className="w-full p-6 bg-blue-50 rounded-[2rem] border-4 border-blue-100 text-3xl font-black text-slate-900 outline-none text-center focus:border-blue-400" 
                       value={user.secretPhrase} 
                       onChange={e => setUser({...user, secretPhrase: e.target.value})} 
                     />
-                    <p className="text-xs text-slate-400 font-bold text-center italic px-4">When "Listening" is ON, saying or typing this word triggers the alarm instantly.</p>
+                    <p className="text-xs text-slate-400 font-bold text-center italic px-4">This word triggers the emergency system instantly.</p>
                   </div>
 
-                  <div className="space-y-3 border-t-2 border-slate-50 pt-6">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">My Full Name</label>
-                    <input 
-                      className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900" 
-                      value={user.name} 
-                      onChange={e => setUser({...user, name: e.target.value})} 
-                    />
+                  <div className="space-y-4 border-t-2 border-slate-50 pt-6">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Display Name</label>
+                      <input className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-400 outline-none font-bold text-slate-900 mt-1" value={user.name} onChange={e => setUser({...user, name: e.target.value})} />
+                    </div>
                   </div>
 
-                  <button onClick={() => setView('home')} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl uppercase tracking-widest shadow-2xl active:scale-95">Save & Return Home</button>
+                  <button onClick={() => setView('home')} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl uppercase tracking-widest shadow-2xl active:scale-95">Save & Finish</button>
                 </div>
               </div>
             )}
@@ -378,7 +424,7 @@ const App: React.FC = () => {
               <span className="text-[10px] font-black uppercase tracking-widest">Home</span>
             </button>
             
-            <button onClick={triggerSOS} className="w-20 h-20 rounded-full bg-red-600 text-white flex items-center justify-center -mt-20 border-[8px] border-white shadow-[0_20px_40px_rgba(220,38,38,0.4)] active:scale-90 transition-all hover:scale-105">
+            <button onClick={triggerSOS} className="w-20 h-20 rounded-full bg-red-600 text-white flex items-center justify-center -mt-20 border-[8px] border-white shadow-2xl active:scale-90 transition-all">
               <i className="fas fa-bolt text-3xl"></i>
             </button>
 
