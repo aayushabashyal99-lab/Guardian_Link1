@@ -1,188 +1,92 @@
 
-import { Home, LogOut, MessageSquare, Settings, Shield } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import AuthScreen from './components/AuthScreen';
-import Dashboard from './components/Dashboard';
-import Messenger from './components/Messenger';
-import SettingsPanel from './components/SettingsPanel';
-import { auth, db, doc, getDoc, setDoc } from './services/firebase';
-import { AppSettings, AppView, User } from './types';
-
-const SETTINGS_KEY = 'guardian_link_settings_v3';
-const ACTIVE_ALERT_KEY = 'guardian_active_alert_id_v3';
-
-const DEFAULT_SETTINGS: AppSettings = {
-  triggerPhrase: 'Guardian, help me',
-  checkInDuration: 15,
-  contacts: [],
-  isListening: false
-};
+import React, { useState, useEffect } from 'react';
+import Dashboard from './Dashboard';
+import { UserState, SafetyAlert } from './types';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('guardian_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+  const [userState, setUserState] = useState<UserState>({
+    isSOSActive: false,
+    batteryLevel: 85,
+    signalStrength: 4,
+    location: null,
   });
-  
-  const [appView, setAppView] = useState<AppView>(AppView.DASHBOARD);
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [activeAlertId, setActiveAlertId] = useState<string | null>(() => {
-    return localStorage.getItem(ACTIVE_ALERT_KEY);
-  });
-  const [isEmergency, setIsEmergency] = useState(!!activeAlertId);
 
-  // Sync settings when user logs in
+  const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
+
   useEffect(() => {
-    if (!user) return;
+    // Simulate periodic updates
+    const interval = setInterval(() => {
+      setUserState(prev => ({
+        ...prev,
+        batteryLevel: Math.max(0, prev.batteryLevel - 0.1),
+      }));
+    }, 10000);
 
-    const fetchSettings = async () => {
-      try {
-        const userEmail = user.email.toLowerCase();
-        const docRef = doc(db, "settings", userEmail);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const cloudData = docSnap.data() as AppSettings;
-          // Ensure contacts is always initialized as an array
-          const cloudSettings = {
-            ...DEFAULT_SETTINGS,
-            ...cloudData,
-            contacts: Array.isArray(cloudData.contacts) ? cloudData.contacts : []
-          };
-          
-          setSettings(cloudSettings);
-          localStorage.setItem(SETTINGS_KEY, JSON.stringify(cloudSettings));
-        } else {
-          // If user exists but has no cloud settings (first login), 
-          // check local storage fallback or use defaults
-          const local = localStorage.getItem(SETTINGS_KEY);
-          if (local) {
-             const localData = JSON.parse(local);
-             await setDoc(docRef, localData);
-             setSettings(localData);
-          } else {
-             await setDoc(docRef, DEFAULT_SETTINGS);
-             setSettings(DEFAULT_SETTINGS);
+    // Get initial location
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        setUserState(prev => ({
+          ...prev,
+          location: {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
           }
-        }
-      } catch (e) {
-        console.error("Cloud sync failed, using local fallback", e);
-        const local = localStorage.getItem(SETTINGS_KEY);
-        if (local) setSettings(JSON.parse(local));
-      }
-    };
-
-    fetchSettings();
-  }, [user?.email]);
-
-  // Persist settings locally and to cloud whenever they change
-  const updateSettings = async (newSettings: Partial<AppSettings>) => {
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-
-    if (user) {
-      try {
-        const userEmail = user.email.toLowerCase();
-        await setDoc(doc(db, "settings", userEmail), updated, { merge: true });
-      } catch (e) {
-        console.error("Failed to save settings to cloud", e);
-      }
+        }));
+      });
     }
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleSOS = () => {
+    setUserState(prev => {
+      const newState = !prev.isSOSActive;
+      if (newState) {
+        const newAlert: SafetyAlert = {
+          id: Date.now().toString(),
+          type: 'emergency',
+          timestamp: new Date(),
+          message: "SOS Beacon Activated",
+          location: prev.location || undefined
+        };
+        setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
+      }
+      return { ...prev, isSOSActive: newState };
+    });
   };
-
-  useEffect(() => {
-    if (activeAlertId) {
-      localStorage.setItem(ACTIVE_ALERT_KEY, activeAlertId);
-      setIsEmergency(true);
-    } else {
-      localStorage.removeItem(ACTIVE_ALERT_KEY);
-      setIsEmergency(false);
-    }
-  }, [activeAlertId]);
-
-  const handleLogout = () => {
-    auth.signOut().catch(() => {});
-    localStorage.removeItem('guardian_user');
-    localStorage.removeItem(ACTIVE_ALERT_KEY);
-    localStorage.removeItem(SETTINGS_KEY);
-    setUser(null);
-    setSettings(DEFAULT_SETTINGS);
-    setAppView(AppView.DASHBOARD);
-  };
-
-  if (!user) {
-    return <AuthScreen onLogin={(u) => { 
-      setUser(u); 
-      localStorage.setItem('guardian_user', JSON.stringify(u)); 
-    }} />;
-  }
 
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto bg-[#020617] relative text-slate-100 font-sans shadow-2xl">
-      <header className="p-6 bg-[#020617]/90 backdrop-blur-xl sticky top-0 z-50 flex justify-between items-center border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl transition-all duration-500 ${isEmergency ? 'bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.6)]' : 'bg-blue-600'}`}>
-            <Shield size={20} className="text-white" />
+    <div className="min-h-screen bg-slate-950 text-slate-50">
+      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center animate-pulse">
+                <i className="fas fa-shield-alt text-white"></i>
+              </div>
+              <span className="text-xl font-bold tracking-tight">SAFETY<span className="text-red-500">GUARDIAN</span></span>
+            </div>
+            <div className="flex items-center gap-4 text-sm font-medium">
+              <div className="flex items-center gap-1 text-slate-400">
+                <i className="fas fa-signal"></i>
+                <span>{userState.signalStrength}G</span>
+              </div>
+              <div className="flex items-center gap-1 text-slate-400">
+                <i className={`fas fa-battery-${userState.batteryLevel > 20 ? 'full' : 'quarter'}`}></i>
+                <span>{Math.round(userState.batteryLevel)}%</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 className="font-extrabold text-lg tracking-tight leading-none uppercase text-white">GuardianLink</h1>
-            <p className={`text-[8px] mono uppercase font-bold tracking-[0.3em] mt-1 ${isEmergency ? 'text-red-500 animate-pulse' : 'text-slate-500'}`}>
-              {isEmergency ? 'CRITICAL ALERT ACTIVE' : 'Aegis Protection'}
-            </p>
-          </div>
-        </div>
-        <button onClick={handleLogout} className="p-2 text-slate-600 hover:text-red-500 transition-colors group">
-          <LogOut size={18} className="group-hover:scale-110 transition-transform" />
-        </button>
-      </header>
-
-      <main className="flex-1 overflow-y-auto custom-scrollbar">
-        {appView === AppView.DASHBOARD && (
-          <div className="p-6 pb-28">
-            <Dashboard 
-              user={user} 
-              settings={settings} 
-              updateSettings={updateSettings}
-              isEmergency={isEmergency}
-              onAlert={(log) => setActiveAlertId(log.id)}
-              externalActiveAlertId={activeAlertId}
-              onClearAlert={() => setActiveAlertId(null)}
-            />
-          </div>
-        )}
-        {appView === AppView.MESSENGER && (
-          <Messenger user={user} settings={settings} activeAlertId={activeAlertId} />
-        )}
-        {appView === AppView.SETTINGS && (
-          <div className="p-6 pb-28">
-            <SettingsPanel settings={settings} updateSettings={updateSettings} />
-          </div>
-        )}
-      </main>
-
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md p-6 bg-gradient-to-t from-[#020617] via-[#020617] to-transparent z-40">
-        <div className="flex justify-around items-center glass p-2 rounded-[2.5rem] border border-white/10 shadow-2xl">
-          {[
-            { id: AppView.DASHBOARD, icon: Home, label: 'Safety' },
-            { id: AppView.MESSENGER, icon: MessageSquare, label: 'Chats' },
-            { id: AppView.SETTINGS, icon: Settings, label: 'Settings' }
-          ].map(item => (
-            <button 
-              key={item.id} 
-              onClick={() => setAppView(item.id)} 
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all duration-300 ${appView === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              <item.icon size={18} />
-              {appView === item.id && <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>}
-            </button>
-          ))}
         </div>
       </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Dashboard 
+          userState={userState} 
+          alerts={alerts} 
+          onToggleSOS={toggleSOS} 
+        />
+      </main>
     </div>
   );
 };

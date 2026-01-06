@@ -3,7 +3,7 @@ import React from 'react';
 import SOSButton from './SOSButton';
 import GeminiAssistant from './GeminiAssistant';
 import SafetyStats from './SafetyStats';
-import { UserState, SafetyAlert } from '../types';
+import { UserState, SafetyAlert } from './types';
 
 interface DashboardProps {
   userState: UserState;
