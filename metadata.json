@@ -1,0 +1,9 @@
+
+{
+  "name": "Aegis Mesh - AI Safety",
+  "description": "Next-gen personal safety using Gemini Live audio intelligence and real-time mesh networking.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}
