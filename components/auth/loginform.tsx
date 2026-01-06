@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User } from '../../types';
+import { User } from '../../types.ts';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 interface LoginFormProps {
@@ -17,13 +17,15 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onForgotPassword }) =>
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
+    
+    // Simulate API call with a shorter, more reliable timeout
     setTimeout(() => {
-      const mockUser = { id: '1', email, name: 'User' };
+      const mockUser = { id: '1', email, name: email.split('@')[0] || 'User' };
       localStorage.setItem('guardian_user', JSON.stringify(mockUser));
       onSuccess(mockUser);
+      // We don't need to setIsLoading(false) if the parent navigates away, but for safety:
       setIsLoading(false);
-    }, 2000);
+    }, 1000);
   };
 
   return (
@@ -67,7 +69,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onForgotPassword }) =>
         </div>
       </div>
 
-      {/* Forgot Password Link - Added Here */}
+      {/* Forgot Password Link */}
       <div className="flex justify-end -mt-2">
         <button
           type="button"

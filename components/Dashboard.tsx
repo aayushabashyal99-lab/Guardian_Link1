@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, EmergencyContact } from '../types';
+import { User, EmergencyContact } from '../types.ts';
 import { 
   Shield, MapPin, Users, Settings, MessageSquare, AlertTriangle, 
   Menu, X, Bell, LogOut, Navigation, Star, Plus, Lock, ShieldCheck
 } from 'lucide-react';
-import SOSButton from './dashboard/SOSButton';
-import SafetyAI from './dashboard/SafetyAI';
-import EmergencyContactCard from './dashboard/EmergencyContactCard';
+import SOSButton from './dashboard/SOSButton.tsx';
+import SafetyAI from './dashboard/SafetyAI.tsx';
+import EmergencyContactCard from './dashboard/EmergencyContactCard.tsx';
 
 interface DashboardProps {
   user: User;
@@ -25,7 +25,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => setLocation(pos));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setLocation(pos),
+        (err) => console.warn("Location access denied", err)
+      );
     }
   }, []);
 
