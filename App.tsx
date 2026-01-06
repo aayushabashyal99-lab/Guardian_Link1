@@ -1,63 +1,46 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 
-// --- Types ---
-interface Guardian {
+// --- Simple Types ---
+interface TrustedPerson {
   id: string;
   name: string;
   email: string;
   phone: string;
 }
 
-interface UserProfile {
+interface User {
   name: string;
   email: string;
-  safetyPhrase: string;
+  secretPhrase: string;
   isLoggedIn: boolean;
 }
 
-interface AlertStatus {
+interface AlertStep {
   id: string;
-  recipient: string;
-  type: 'Email' | 'SMS';
-  status: 'Sending...' | 'Delivered' | 'Failed';
+  message: string;
+  status: 'pending' | 'done';
 }
 
-// --- Main App Component ---
 const App: React.FC = () => {
-  // Navigation State
-  const [view, setView] = useState<'login' | 'register' | 'forgot-password' | 'home' | 'guardians'>('login');
-  
-  // User State
-  const [user, setUser] = useState<UserProfile>({
-    name: 'User',
-    email: '',
-    safetyPhrase: 'I am in danger',
-    isLoggedIn: false,
-  });
-
-  // Guardian State
-  const [guardians, setGuardians] = useState<Guardian[]>([
-    { id: '1', name: 'Primary Guardian', email: 'family@example.com', phone: '555-0199' }
-  ]);
-
-  // SOS State
-  const [isSOSActive, setIsSOSActive] = useState(false);
+  // --- State ---
+  const [view, setView] = useState<'login' | 'register' | 'forgot' | 'home' | 'people'>('login');
+  const [user, setUser] = useState<User>({ name: '', email: '', secretPhrase: 'Help me', isLoggedIn: false });
+  const [myPeople, setMyPeople] = useState<TrustedPerson[]>([]); // Starts EMPTY
+  const [isEmergency, setIsEmergency] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [alertStatuses, setAlertStatuses] = useState<AlertStatus[]>([]);
-  const [aiGuidance, setAiGuidance] = useState<{ summary: string; steps: string[] } | null>(null);
-  const [loadingAI, setLoadingAI] = useState(false);
+  const [alertSteps, setAlertSteps] = useState<AlertStep[]>([]);
+  const [aiTips, setAiTips] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Form States
-  const [newGuardian, setNewGuardian] = useState({ name: '', email: '', phone: '' });
-  const [authEmail, setAuthEmail] = useState('');
+  // Form states
+  const [tempPerson, setTempPerson] = useState({ name: '', email: '', phone: '' });
 
-  // --- Functions ---
-
+  // --- Actions ---
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setUser({ ...user, isLoggedIn: true, name: authEmail.split('@')[0] });
+    setUser({ ...user, isLoggedIn: true });
     setView('home');
   };
 
@@ -67,48 +50,48 @@ const App: React.FC = () => {
     setView('home');
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const addPerson = (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`A reset link has been sent to ${authEmail}`);
-    setView('login');
-  };
-
-  const addGuardian = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newGuardian.name && (newGuardian.email || newGuardian.phone)) {
-      setGuardians([...guardians, { ...newGuardian, id: Date.now().toString() }]);
-      setNewGuardian({ name: '', email: '', phone: '' });
+    if (!tempPerson.name || (!tempPerson.email && !tempPerson.phone)) {
+      alert("Please enter a name and at least one way to contact them (Email or Phone).");
+      return;
     }
+    setMyPeople([...myPeople, { ...tempPerson, id: Date.now().toString() }]);
+    setTempPerson({ name: '', email: '', phone: '' });
+    alert("Added successfully!");
   };
 
-  const removeGuardian = (id: string) => {
-    setGuardians(guardians.filter(g => g.id !== id));
-  };
+  const startHelp = async () => {
+    if (myPeople.length === 0) {
+      alert("You haven't added any trusted people yet! Go to the 'My People' tab first.");
+      setView('people');
+      return;
+    }
 
-  const triggerSOS = async () => {
-    setIsSOSActive(true);
+    setIsEmergency(true);
     setIsListening(false);
-    
-    // 1. Simulate Automatic Alerts (SMS & Email)
-    const initialAlerts: AlertStatus[] = [];
-    guardians.forEach(g => {
-      if (g.email) initialAlerts.push({ id: `e-${g.id}`, recipient: g.email, type: 'Email', status: 'Sending...' });
-      if (g.phone) initialAlerts.push({ id: `s-${g.id}`, recipient: g.phone, type: 'SMS', status: 'Sending...' });
+
+    // 1. Create the checklist of notifications
+    const steps: AlertStep[] = [];
+    myPeople.forEach(p => {
+      if (p.email) steps.push({ id: `e-${p.id}`, message: `Emailing ${p.name}...`, status: 'pending' });
+      if (p.phone) steps.push({ id: `s-${p.id}`, message: `Texting ${p.name}...`, status: 'pending' });
     });
-    setAlertStatuses(initialAlerts);
+    setAlertSteps(steps);
 
-    // Update statuses to delivered after a delay
+    // Simulate "Sending"
     setTimeout(() => {
-      setAlertStatuses(prev => prev.map(a => ({ ...a, status: 'Delivered' })));
-    }, 2500);
+      setAlertSteps(prev => prev.map(s => ({ ...s, status: 'done' })));
+    }, 2000);
 
-    // 2. Fetch AI Emergency Triage
-    setLoadingAI(true);
+    // 2. Get Simple AI Advice
+    setLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `EMERGENCY ALERT TRIGGERED. Safety Phrase used: "${user.safetyPhrase}". 
-        The user's guardians have been notified. Provide 3 high-priority survival steps. 
-        Format as JSON: { "summary": "brief overview", "steps": ["step1", "step2", "step3"] }`;
+      const prompt = `User is in DANGER. They said: "${user.secretPhrase}". 
+        Give 3 very simple, short safety tips for a child or elderly person. 
+        Example: "Run to a safe place", "Call for help loudly".
+        Return as JSON list: ["tip1", "tip2", "tip3"]`;
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -116,69 +99,65 @@ const App: React.FC = () => {
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summary: { type: Type.STRING },
-              steps: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ['summary', 'steps']
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           }
         }
       });
-      setAiGuidance(JSON.parse(response.text || '{}'));
-    } catch (error) {
-      console.error("AI Dispatch Error:", error);
+      setAiTips(JSON.parse(response.text || '[]'));
+    } catch (err) {
+      setAiTips(["Stay calm", "Find a safe place", "Keep your phone close"]);
     } finally {
-      setLoadingAI(false);
+      setLoading(false);
     }
   };
 
-  // --- Auth Views ---
-
+  // --- Login / Register Views ---
   if (!user.isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 font-sans">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-2xl animate-in fade-in zoom-in duration-300">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-600/20 mb-4">
-              <i className="fas fa-shield-heart text-2xl text-white"></i>
+      <div className="min-h-screen bg-white text-slate-900 p-6 flex flex-col justify-center font-sans">
+        <div className="max-w-md mx-auto w-full space-y-8">
+          <div className="text-center">
+            <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
+              <i className="fas fa-handshake-angle text-3xl text-white"></i>
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">SafetyGuardian</h1>
-            <p className="text-slate-500 text-sm">Always protected, always connected.</p>
+            <h1 className="text-3xl font-bold tracking-tight">GuardianSafe</h1>
+            <p className="text-slate-500 mt-2">Helping you stay safe everywhere.</p>
           </div>
 
           {view === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
-              <input required type="email" placeholder="Email Address" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
-              <input required type="password" placeholder="Password" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" />
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95">Sign In</button>
-              <div className="flex justify-between text-xs font-bold text-slate-500">
-                <button type="button" onClick={() => setView('forgot-password')} className="hover:text-blue-400">Forgot Password?</button>
-                <button type="button" onClick={() => setView('register')} className="hover:text-blue-400">Create Account</button>
+              <input required type="email" placeholder="Your Email" className="w-full p-4 border rounded-2xl bg-slate-50" />
+              <input required type="password" placeholder="Your Password" className="w-full p-4 border rounded-2xl bg-slate-50" />
+              <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Sign In</button>
+              <div className="flex justify-between text-sm font-medium">
+                <button type="button" onClick={() => setView('forgot')} className="text-blue-600">Forgot Password?</button>
+                <button type="button" onClick={() => setView('register')} className="text-blue-600">New Account</button>
               </div>
             </form>
           )}
 
           {view === 'register' && (
             <form onSubmit={handleRegister} className="space-y-4">
-              <input required type="text" placeholder="Full Name" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" onChange={e => setUser({...user, name: e.target.value})} />
-              <input required type="email" placeholder="Email Address" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" />
-              <input required type="password" placeholder="Password" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" />
-              <div className="p-3 bg-blue-600/5 rounded-xl border border-blue-500/20">
-                <label className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block mb-1">Emergency Trigger Phrase</label>
-                <input required type="text" placeholder="e.g. Save me now" className="w-full bg-transparent text-sm text-white border-none outline-none focus:ring-0 p-0" value={user.safetyPhrase} onChange={e => setUser({...user, safetyPhrase: e.target.value})} />
+              <input required placeholder="Your Name" className="w-full p-4 border rounded-2xl bg-slate-50" value={user.name} onChange={e => setUser({...user, name: e.target.value})} />
+              <input required type="email" placeholder="Your Email" className="w-full p-4 border rounded-2xl bg-slate-50" />
+              <input required type="password" placeholder="Choose a Password" className="w-full p-4 border rounded-2xl bg-slate-50" />
+              <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                <label className="text-xs font-bold text-blue-800 mb-1 block">Your Secret "Help" Phrase</label>
+                <input required placeholder="e.g. Save me" className="w-full bg-transparent font-bold text-lg outline-none" value={user.secretPhrase} onChange={e => setUser({...user, secretPhrase: e.target.value})} />
+                <p className="text-[10px] text-blue-400 mt-1 italic">Say this phrase out loud to trigger the alarm.</p>
               </div>
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95">Complete Registration</button>
-              <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-400">Back to Login</button>
+              <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Create My Account</button>
+              <button type="button" onClick={() => setView('login')} className="w-full text-center text-sm font-bold text-slate-500">Back to Sign In</button>
             </form>
           )}
 
-          {view === 'forgot-password' && (
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <p className="text-xs text-slate-400 mb-2">Enter your email to receive a password reset link.</p>
-              <input required type="email" placeholder="Email Address" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95">Send Reset Link</button>
-              <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-400">Back to Login</button>
+          {view === 'forgot' && (
+            <form onSubmit={(e) => {e.preventDefault(); alert("Sent!"); setView('login');}} className="space-y-4">
+              <p className="text-sm text-slate-500 text-center">Enter your email and we will send a reset link.</p>
+              <input required type="email" placeholder="Email Address" className="w-full p-4 border rounded-2xl bg-slate-50" />
+              <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all">Reset Password</button>
+              <button type="button" onClick={() => setView('login')} className="w-full text-center text-sm font-bold text-slate-500">Back to Login</button>
             </form>
           )}
         </div>
@@ -187,222 +166,202 @@ const App: React.FC = () => {
   }
 
   // --- Main App Views ---
-
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-50 flex flex-col transition-colors duration-1000 ${isSOSActive ? 'bg-red-950' : ''}`}>
+    <div className={`min-h-screen flex flex-col transition-all duration-700 ${isEmergency ? 'bg-red-600' : 'bg-slate-50'}`}>
       
-      {/* Header */}
-      <header className="p-4 flex items-center justify-between border-b border-white/5 backdrop-blur-md sticky top-0 z-50 bg-slate-950/50">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-colors ${isSOSActive ? 'bg-red-600 shadow-red-600/40' : 'bg-blue-600 shadow-blue-600/40'}`}>
-            <i className={`fas ${isSOSActive ? 'fa-exclamation-triangle animate-pulse' : 'fa-shield-heart'} text-white`}></i>
+      {/* Top Header */}
+      {!isEmergency && (
+        <header className="p-6 bg-white flex justify-between items-center shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
+              <i className="fas fa-shield"></i>
+            </div>
+            <div>
+              <h1 className="font-bold text-slate-900 leading-none">GuardianSafe</h1>
+              <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Watching over you</span>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-lg leading-none">Guardian</h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-              {isSOSActive ? 'Emergency Active' : 'System Secure'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold">{user.name}</p>
-            <p className="text-[10px] text-slate-500">Member ID: {Math.floor(Math.random()*9000)+1000}</p>
-          </div>
-          <button onClick={() => setUser({...user, isLoggedIn: false})} className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-slate-500 hover:text-red-400 transition-colors">
+          <button onClick={() => setUser({...user, isLoggedIn: false})} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
             <i className="fas fa-power-off text-xs"></i>
           </button>
-        </div>
-      </header>
+        </header>
+      )}
 
-      {/* Main Container */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-32 space-y-6 max-w-2xl mx-auto w-full">
+      {/* Main Content Area */}
+      <main className="flex-1 p-6 overflow-y-auto pb-32">
         
-        {/* SOS OVERLAY */}
-        {isSOSActive && (
-          <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-            <div className="bg-red-600 rounded-[2rem] p-8 text-center text-white shadow-2xl shadow-red-600/30 border border-red-500">
-              <h2 className="text-3xl font-black italic mb-2 tracking-tighter uppercase">Help is Coming</h2>
-              <p className="text-red-100 text-sm font-medium opacity-90 leading-tight">
-                Emergency emails and texts have been automatically sent to your loved ones.
-              </p>
-              <button onClick={() => setIsSOSActive(false)} className="mt-8 bg-white text-red-600 px-10 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">
-                I Am Safe Now
-              </button>
+        {/* EMERGENCY MODE SCREEN */}
+        {isEmergency ? (
+          <div className="h-full flex flex-col justify-center items-center text-white text-center space-y-8 animate-in fade-in zoom-in duration-500">
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/30 rounded-full animate-ping"></div>
+              <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center text-red-600 text-5xl shadow-2xl relative">
+                <i className="fas fa-exclamation-triangle"></i>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black uppercase tracking-tighter">Help is coming</h2>
+              <p className="text-red-100 font-medium opacity-90 px-8">We have sent your location to {myPeople.length} people.</p>
             </div>
 
-            <div className="bg-slate-900/50 rounded-3xl p-6 border border-white/5 space-y-4">
-              <h3 className="text-xs font-black text-red-400 uppercase tracking-widest">Notification Log</h3>
-              <div className="space-y-2">
-                {alertStatuses.map(alert => (
-                  <div key={alert.id} className="flex items-center justify-between bg-slate-950 p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs ${alert.type === 'Email' ? 'bg-blue-600/10 text-blue-400' : 'bg-green-600/10 text-green-400'}`}>
-                        <i className={`fas ${alert.type === 'Email' ? 'fa-envelope' : 'fa-comment-sms'}`}></i>
-                      </div>
-                      <span className="text-xs font-bold">{alert.recipient}</span>
-                    </div>
-                    <span className={`text-[10px] font-black uppercase ${alert.status === 'Delivered' ? 'text-green-400' : 'text-slate-500'}`}>
-                      {alert.status}
-                    </span>
+            <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/20">
+              <h3 className="text-xs font-bold uppercase tracking-widest mb-4 opacity-70">Sending Alerts...</h3>
+              <div className="space-y-3">
+                {alertSteps.map(step => (
+                  <div key={step.id} className="flex items-center justify-between text-left">
+                    <span className="text-sm font-medium">{step.message}</span>
+                    <i className={`fas ${step.status === 'done' ? 'fa-circle-check text-green-300' : 'fa-spinner fa-spin opacity-50'}`}></i>
                   </div>
                 ))}
               </div>
             </div>
 
-            {loadingAI ? (
-              <div className="text-center py-8">
-                <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                <p className="text-xs text-red-400 font-bold uppercase tracking-widest">Connecting AI Command...</p>
-              </div>
-            ) : aiGuidance && (
-              <div className="bg-blue-600 rounded-[2rem] p-6 text-white space-y-4 shadow-2xl">
-                <div className="flex items-center gap-2">
-                  <i className="fas fa-brain"></i>
-                  <span className="text-xs font-black uppercase tracking-widest">AI Safety Dispatch</span>
+            {aiTips.length > 0 && (
+              <div className="w-full max-w-sm bg-white text-red-600 rounded-3xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-red-100 pb-2">
+                  <i className="fas fa-bolt"></i>
+                  <span className="text-xs font-black uppercase">Instant Safety Tips</span>
                 </div>
-                <p className="text-sm font-bold leading-tight">{aiGuidance.summary}</p>
                 <div className="space-y-3">
-                  {aiGuidance.steps.map((step, i) => (
-                    <div key={i} className="flex gap-4 items-center bg-white/10 p-4 rounded-2xl">
-                      <div className="w-6 h-6 rounded-full bg-white text-blue-600 flex items-center justify-center text-[10px] font-black shrink-0">{i+1}</div>
-                      <span className="text-xs font-medium leading-tight">{step}</span>
+                  {aiTips.map((tip, i) => (
+                    <div key={i} className="flex gap-4 items-center text-left">
+                      <div className="w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">{i+1}</div>
+                      <p className="text-sm font-black leading-tight">{tip}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Home Hub View */}
-        {!isSOSActive && view === 'home' && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="text-center py-4">
-              <h1 className="text-2xl font-bold">Safe for now, {user.name}</h1>
-              <p className="text-slate-500 text-sm mt-1">Tap the shield or say your phrase if you feel unsafe.</p>
-            </div>
-
-            <div className="relative flex justify-center py-8">
-              <button 
-                onClick={triggerSOS}
-                className="w-64 h-64 rounded-full bg-slate-900 border-[12px] border-slate-800 flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-all group hover:border-red-600/40"
-              >
-                <i className="fas fa-shield-heart text-6xl text-slate-600 mb-4 group-hover:text-red-500 transition-colors"></i>
-                <span className="text-xs font-black text-slate-500 group-hover:text-white tracking-[0.2em] uppercase">Emergency SOS</span>
-              </button>
-              {isListening && (
-                <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full animate-ping pointer-events-none"></div>
-              )}
-            </div>
-
-            <button 
-              onClick={() => setIsListening(!isListening)}
-              className={`w-full p-6 rounded-3xl border transition-all flex items-center justify-between ${isListening ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-white/10`}>
-                  <i className={`fas ${isListening ? 'fa-microphone animate-pulse' : 'fa-microphone-slash'}`}></i>
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold">{isListening ? 'Listening Active' : 'Voice Trigger Off'}</p>
-                  <p className="text-[10px] opacity-70 italic">Phrase: "{user.safetyPhrase}"</p>
-                </div>
-              </div>
-              <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-white' : 'bg-slate-800'}`}></div>
+            <button onClick={() => setIsEmergency(false)} className="bg-white text-red-600 px-12 py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all text-sm">
+              I am safe now
             </button>
-
-            {isListening && (
-              <button onClick={triggerSOS} className="w-full text-center text-[10px] font-bold text-blue-500 uppercase tracking-widest animate-bounce">
-                [ Click here to simulate saying phrase ]
-              </button>
-            )}
-
-            <div className="grid grid-cols-2 gap-4 mt-8">
-              <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 flex flex-col items-center text-center gap-2">
-                <i className="fas fa-user-shield text-blue-500"></i>
-                <p className="text-xs font-bold">{guardians.length}</p>
-                <p className="text-[10px] text-slate-500 uppercase font-black">Active Guardians</p>
-              </div>
-              <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 flex flex-col items-center text-center gap-2">
-                <i className="fas fa-location-dot text-green-500"></i>
-                <p className="text-xs font-bold">Secure</p>
-                <p className="text-[10px] text-slate-500 uppercase font-black">Location Status</p>
-              </div>
-            </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* HOME HUB */}
+            {view === 'home' && (
+              <div className="space-y-8 py-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-slate-900">Hello, {user.name}</h2>
+                  <p className="text-slate-500 text-sm">Follow the phrase trigger or tap the button.</p>
+                </div>
 
-        {/* Guardians Management View */}
-        {!isSOSActive && view === 'guardians' && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-500">
-            <h2 className="text-2xl font-bold">Your Circle</h2>
-            <p className="text-xs text-slate-500 leading-relaxed">Add trusted family members or friends. We will email and text them immediately during an emergency.</p>
-            
-            <form onSubmit={addGuardian} className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
-              <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Add New Guardian</h3>
-              <input required placeholder="Name" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" value={newGuardian.name} onChange={e => setNewGuardian({...newGuardian, name: e.target.value})} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input placeholder="Email" type="email" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" value={newGuardian.email} onChange={e => setNewGuardian({...newGuardian, email: e.target.value})} />
-                <input placeholder="Phone" type="tel" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-blue-500 outline-none" value={newGuardian.phone} onChange={e => setNewGuardian({...newGuardian, phone: e.target.value})} />
-              </div>
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-                <i className="fas fa-plus-circle text-xs"></i>
-                <span>Add to Circle</span>
-              </button>
-            </form>
+                <div className="flex justify-center relative">
+                  <button onClick={startHelp} className="w-64 h-64 rounded-full bg-slate-900 border-[12px] border-slate-200 flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-all group hover:border-red-500/20">
+                    <i className="fas fa-hand-holding-medical text-6xl text-slate-700 mb-4 group-hover:text-red-500 transition-colors"></i>
+                    <span className="text-sm font-black text-slate-500 group-hover:text-white tracking-[0.2em] uppercase">HELP ME</span>
+                  </button>
+                  {isListening && <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full animate-ping pointer-events-none"></div>}
+                </div>
 
-            <div className="space-y-3">
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Currently Protecting You</h3>
-              {guardians.length === 0 ? (
-                <div className="text-center py-10 text-slate-600 italic text-sm">No guardians added yet. Your safety is at risk.</div>
-              ) : (
-                guardians.map(g => (
-                  <div key={g.id} className="bg-slate-900/40 p-4 rounded-2xl flex items-center justify-between border border-white/5">
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => setIsListening(!isListening)}
+                    className={`w-full p-6 rounded-3xl border transition-all flex items-center justify-between ${isListening ? 'bg-blue-600 border-blue-500 text-white shadow-xl' : 'bg-white border-slate-200 text-slate-500'}`}
+                  >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
-                        {g.name[0]}
+                      <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                        <i className={`fas ${isListening ? 'fa-microphone' : 'fa-microphone-slash'}`}></i>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold">{g.name}</h4>
-                        <div className="flex gap-3 text-[10px] text-slate-500 mt-0.5">
-                          {g.email && <span><i className="fas fa-envelope mr-1"></i>Email</span>}
-                          {g.phone && <span><i className="fas fa-phone mr-1"></i>SMS</span>}
-                        </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold">{isListening ? 'LISTENING NOW' : 'TAP TO LISTEN'}</p>
+                        <p className="text-[10px] opacity-80">Say your phrase: "{user.secretPhrase}"</p>
                       </div>
                     </div>
-                    <button onClick={() => removeGuardian(g.id)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center">
-                      <i className="fas fa-trash-alt text-xs"></i>
-                    </button>
+                    <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-white animate-pulse' : 'bg-slate-200'}`}></div>
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center text-center gap-2">
+                      <i className="fas fa-users text-blue-500"></i>
+                      <p className="text-xl font-bold">{myPeople.length}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">My People</p>
+                    </div>
+                    <div className="bg-white p-5 rounded-3xl border border-slate-200 flex flex-col items-center text-center gap-2">
+                      <i className="fas fa-lock text-green-500"></i>
+                      <p className="text-xl font-bold italic">ON</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Security</p>
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                </div>
+              </div>
+            )}
+
+            {/* MY PEOPLE LIST */}
+            {view === 'people' && (
+              <div className="space-y-6 animate-in slide-in-from-right duration-500 py-4">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold">My Trusted People</h2>
+                  <p className="text-sm text-slate-500">Who should we notify in danger?</p>
+                </div>
+
+                <form onSubmit={addPerson} className="bg-white p-6 rounded-[2rem] border border-slate-200 space-y-4 shadow-sm">
+                  <h3 className="text-xs font-black text-blue-600 uppercase tracking-widest ml-2">Add New Person</h3>
+                  <input required placeholder="Name (e.g. Dad)" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-300" value={tempPerson.name} onChange={e => setTempPerson({...tempPerson, name: e.target.value})} />
+                  <div className="grid grid-cols-1 gap-4">
+                    <input placeholder="Email Address" type="email" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-300" value={tempPerson.email} onChange={e => setTempPerson({...tempPerson, email: e.target.value})} />
+                    <input placeholder="Phone Number" type="tel" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-300" value={tempPerson.phone} onChange={e => setTempPerson({...tempPerson, phone: e.target.value})} />
+                  </div>
+                  <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all text-sm uppercase">Add to Circle</button>
+                </form>
+
+                <div className="space-y-3">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">My Safe Circle</h3>
+                  {myPeople.length === 0 ? (
+                    <div className="text-center py-10 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400 italic text-sm">No people added yet. Add someone!</div>
+                  ) : (
+                    myPeople.map(p => (
+                      <div key={p.id} className="bg-white p-5 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm transition-all hover:border-blue-200">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 font-bold text-lg">
+                            {p.name[0]}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900">{p.name}</h4>
+                            <div className="flex gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                              {p.email && <span>Email</span>}
+                              {p.phone && <span>SMS</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => setMyPeople(myPeople.filter(x => x.id !== p.id))} className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
+                          <i className="fas fa-trash text-[10px]"></i>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 
-      {/* Bottom Navbar */}
-      <nav className="fixed bottom-0 left-0 right-0 p-6 bg-slate-950/80 backdrop-blur-3xl border-t border-white/5 z-50">
-        <div className="max-w-md mx-auto flex justify-between items-center px-4">
-          <button onClick={() => { setView('home'); setIsSOSActive(false); }} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'home' && !isSOSActive ? 'text-blue-500 scale-110' : 'text-slate-500'}`}>
-            <i className="fas fa-house-chimney text-lg"></i>
-            <span className="text-[10px] font-black tracking-widest">HOME</span>
-          </button>
-          
-          <button 
-            onClick={triggerSOS}
-            className={`w-16 h-16 rounded-full flex items-center justify-center -mt-12 border-[6px] border-slate-950 shadow-2xl transition-all active:scale-90 ${isSOSActive ? 'bg-white text-red-600 scale-110 shadow-red-600/50' : 'bg-red-600 text-white shadow-red-600/30 hover:scale-105'}`}
-          >
-            <i className={`fas ${isSOSActive ? 'fa-exclamation-triangle' : 'fa-bolt-lightning'} text-xl`}></i>
-          </button>
+      {/* Bottom Simple Nav */}
+      {!isEmergency && (
+        <nav className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-slate-100 z-50">
+          <div className="max-w-md mx-auto flex justify-between items-center px-6">
+            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'home' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
+              <i className="fas fa-home-alt text-xl"></i>
+              <span className="text-[10px] font-black tracking-widest">DASHBOARD</span>
+            </button>
+            
+            <button 
+              onClick={startHelp} 
+              className="w-20 h-20 rounded-full bg-red-600 text-white flex items-center justify-center -mt-16 border-[8px] border-slate-50 shadow-2xl active:scale-90 transition-all hover:scale-105"
+            >
+              <i className="fas fa-bolt text-2xl"></i>
+            </button>
 
-          <button onClick={() => { setView('guardians'); setIsSOSActive(false); }} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'guardians' ? 'text-blue-500 scale-110' : 'text-slate-500'}`}>
-            <i className="fas fa-user-shield text-lg"></i>
-            <span className="text-[10px] font-black tracking-widest">CIRCLE</span>
-          </button>
-        </div>
-      </nav>
+            <button onClick={() => setView('people')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'people' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
+              <i className="fas fa-user-group text-xl"></i>
+              <span className="text-[10px] font-black tracking-widest">MY PEOPLE</span>
+            </button>
+          </div>
+        </nav>
+      )}
     </div>
   );
 };
