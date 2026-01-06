@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import Dashboard from './Dashboard';
+import MainDashboard from './MainDashboard';
 import { UserState, SafetyAlert } from './types';
 
 const App: React.FC = () => {
@@ -14,7 +14,6 @@ const App: React.FC = () => {
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
 
   useEffect(() => {
-    // Simulate periodic updates
     const interval = setInterval(() => {
       setUserState(prev => ({
         ...prev,
@@ -22,7 +21,6 @@ const App: React.FC = () => {
       }));
     }, 10000);
 
-    // Get initial location
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((position) => {
         setUserState(prev => ({
@@ -81,7 +79,7 @@ const App: React.FC = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Dashboard 
+        <MainDashboard 
           userState={userState} 
           alerts={alerts} 
           onToggleSOS={toggleSOS} 

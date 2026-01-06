@@ -1,12 +1,12 @@
 
 import React from 'react';
 
-interface SOSButtonProps {
+interface EmergencyButtonProps {
   isActive: boolean;
   onToggle: () => void;
 }
 
-const SOSButton: React.FC<SOSButtonProps> = ({ isActive, onToggle }) => {
+const EmergencyButton: React.FC<EmergencyButtonProps> = ({ isActive, onToggle }) => {
   return (
     <div className="flex flex-col items-center justify-center p-6 space-y-6">
       <div className="relative">
@@ -28,7 +28,6 @@ const SOSButton: React.FC<SOSButtonProps> = ({ isActive, onToggle }) => {
           <span className="font-bold text-2xl tracking-widest">{isActive ? 'SOS ON' : 'SOS'}</span>
         </button>
       </div>
-      
       <p className={`text-sm text-center font-medium transition-colors ${isActive ? 'text-red-400 animate-pulse' : 'text-slate-500'}`}>
         {isActive 
           ? 'Emergency services notified. Broadcasting GPS.' 
@@ -38,4 +37,4 @@ const SOSButton: React.FC<SOSButtonProps> = ({ isActive, onToggle }) => {
   );
 };
 
-export default SOSButton;
+export default EmergencyButton;
