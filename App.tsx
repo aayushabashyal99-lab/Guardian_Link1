@@ -228,7 +228,7 @@ const App: React.FC = () => {
   const renderAuth = () => {
     if (view === 'login') return (
       <form onSubmit={handleLogin} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-3xl font-black text-center mb-8">Sign In</h2>
+        <h2 className="text-3xl font-white text-center mb-8">Sign In</h2>
         <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
         <div className="relative">
           <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={passInput} onChange={e => setPassInput(e.target.value)} />
