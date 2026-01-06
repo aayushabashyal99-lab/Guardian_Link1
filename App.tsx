@@ -101,7 +101,7 @@ const App: React.FC = () => {
 
       recognition.onresult = (event: any) => {
         const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
+          .map((result: any) => (result as any)[0].transcript)
           .join('')
           .toLowerCase();
 
@@ -228,63 +228,63 @@ const App: React.FC = () => {
   const renderAuth = () => {
     if (view === 'login') return (
       <form onSubmit={handleLogin} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-3xl font-white text-center mb-8">Sign In</h2>
-        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
+        <h2 className="text-3xl font-black text-center mb-8 text-slate-900">Sign In</h2>
+        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
         <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={passInput} onChange={e => setPassInput(e.target.value)} />
-          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-500 hover:text-white">
+          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500 transition-colors" value={passInput} onChange={e => setPassInput(e.target.value)} />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
         </div>
-        <button className="w-full py-4 bg-blue-600 rounded-2xl font-bold shadow-xl">Login</button>
+        <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Login</button>
         <div className="flex justify-between text-xs text-slate-500 font-bold px-2">
-          <button type="button" onClick={() => setView('register')}>Create Account</button>
-          <button type="button" onClick={() => setView('forgot-password')}>Forgot Password?</button>
+          <button type="button" onClick={() => setView('register')} className="hover:text-blue-600">Create Account</button>
+          <button type="button" onClick={() => setView('forgot-password')} className="hover:text-blue-600">Forgot Password?</button>
         </div>
       </form>
     );
 
     if (view === 'register') return (
       <form onSubmit={handleRegister} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-3xl font-black text-center mb-8">Join GuardianSafe</h2>
-        <input required placeholder="Full Name" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={nameInput} onChange={e => setNameInput(e.target.value)} />
-        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
+        <h2 className="text-3xl font-black text-center mb-8 text-slate-900">Join GuardianSafe</h2>
+        <input required placeholder="Full Name" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={nameInput} onChange={e => setNameInput(e.target.value)} />
+        <input required type="email" placeholder="Email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={emailInput} onChange={e => setEmailInput(e.target.value)} />
         <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={passInput} onChange={e => setPassInput(e.target.value)} />
-          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-500 hover:text-white">
+          <input required type={showPassword ? "text" : "password"} placeholder="Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={passInput} onChange={e => setPassInput(e.target.value)} />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
         </div>
-        <div className="p-4 bg-blue-600/10 rounded-2xl border border-blue-500/20">
-          <label className="text-[10px] font-bold uppercase text-blue-400">Secret Recovery Phrase</label>
-          <input required placeholder="e.g. Blue Phoenix" className="w-full bg-transparent outline-none text-xl font-bold mt-1" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
+        <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+          <label className="text-[10px] font-bold uppercase text-blue-600">Secret Recovery Phrase</label>
+          <input required placeholder="e.g. Blue Phoenix" className="w-full bg-transparent outline-none text-xl font-bold mt-1 text-slate-900" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
         </div>
-        <button className="w-full py-4 bg-blue-600 rounded-2xl font-bold shadow-xl">Register</button>
-        <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold">Back to Login</button>
+        <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Register</button>
+        <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-600">Back to Login</button>
       </form>
     );
 
     if (view === 'forgot-password') return (
       <form onSubmit={handleForgotPassword} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-2xl font-black text-center mb-8">Identify Account</h2>
-        <input required type="email" placeholder="Enter your email" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
-        <button className="w-full py-4 bg-blue-600 rounded-2xl font-bold shadow-xl">Next</button>
-        <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold">Back to Login</button>
+        <h2 className="text-2xl font-black text-center mb-8 text-slate-900">Identify Account</h2>
+        <input required type="email" placeholder="Enter your email" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
+        <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Next</button>
+        <button type="button" onClick={() => setView('login')} className="w-full text-center text-xs text-slate-500 font-bold hover:text-blue-600">Back to Login</button>
       </form>
     );
 
     if (view === 'reset-password') return (
       <form onSubmit={handleResetPassword} className="space-y-4 w-full animate-in fade-in duration-500">
-        <h2 className="text-2xl font-black text-center mb-8">Reset Password</h2>
-        <p className="text-xs text-slate-400 text-center mb-4">Enter your secret phrase to set a new password.</p>
-        <input required placeholder="Your Secret Phrase" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
+        <h2 className="text-2xl font-black text-center mb-8 text-slate-900">Reset Password</h2>
+        <p className="text-xs text-slate-500 text-center mb-4">Enter your secret phrase to set a new password.</p>
+        <input required placeholder="Your Secret Phrase" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={phraseInput} onChange={e => setPhraseInput(e.target.value)} />
         <div className="relative">
-          <input required type={showPassword ? "text" : "password"} placeholder="New Password" className="w-full p-4 rounded-2xl bg-slate-800 border border-slate-700 outline-none" value={newPass} onChange={e => setNewPass(e.target.value)} />
-          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-500 hover:text-white">
+          <input required type={showPassword ? "text" : "password"} placeholder="New Password" className="w-full p-4 rounded-2xl bg-white border border-slate-200 outline-none text-slate-900 focus:border-blue-500" value={newPass} onChange={e => setNewPass(e.target.value)} />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
             <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
           </button>
         </div>
-        <button className="w-full py-4 bg-green-600 rounded-2xl font-bold shadow-xl">Update Password</button>
+        <button className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold shadow-xl active:scale-95 transition-all">Update Password</button>
       </form>
     );
 
@@ -293,31 +293,33 @@ const App: React.FC = () => {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
         <div className="max-w-sm w-full">
           <div className="text-center mb-10">
-            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-2xl mb-4">
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-2xl mb-4 text-white">
               <i className="fas fa-shield-heart"></i>
             </div>
-            <h1 className="text-4xl font-black tracking-tighter">GuardianSafe</h1>
+            <h1 className="text-4xl font-black tracking-tighter text-slate-900">GuardianSafe</h1>
             <p className="text-slate-500 font-bold">Always Protected.</p>
           </div>
-          {renderAuth()}
+          <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
+            {renderAuth()}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-1000 ${isEmergency ? 'bg-red-900' : 'bg-slate-900'}`}>
+    <div className={`min-h-screen flex flex-col transition-colors duration-1000 ${isEmergency ? 'bg-red-600' : 'bg-slate-50'}`}>
       
       {!isEmergency && (
-        <header className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
+        <header className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg"><i className="fas fa-heart"></i></div>
-            <h1 className="font-black text-xl tracking-tighter">GuardianSafe</h1>
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg text-white"><i className="fas fa-heart"></i></div>
+            <h1 className="font-black text-xl tracking-tighter text-slate-900">GuardianSafe</h1>
           </div>
-          <button onClick={() => {setIsLoggedIn(false); setView('login')}} className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-500"><i className="fas fa-power-off"></i></button>
+          <button onClick={() => {setIsLoggedIn(false); setView('login')}} className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"><i className="fas fa-power-off"></i></button>
         </header>
       )}
 
@@ -325,26 +327,27 @@ const App: React.FC = () => {
         {isEmergency ? (
           <div className="h-full flex flex-col space-y-6 animate-in zoom-in duration-500">
             <div className="text-center py-4">
-              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-red-700 text-3xl mx-auto mb-4 animate-pulse shadow-2xl">
+              <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-red-600 text-3xl mx-auto mb-4 animate-pulse shadow-2xl">
                 <i className="fas fa-exclamation-triangle"></i>
               </div>
-              <h2 className="text-3xl font-black uppercase italic tracking-tighter">Emergency Mode</h2>
+              <h2 className="text-3xl font-black uppercase italic tracking-tighter text-white">Emergency Mode</h2>
               <p className="text-red-100 font-bold opacity-80">Guardians notified of your location.</p>
             </div>
 
             {/* Chat Box */}
-            <div className="flex-1 glass-card rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl min-h-[450px]">
-              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/20">
-                <span className="text-xs font-black uppercase tracking-widest text-white/60">Guardian Response Chat</span>
+            <div className="flex-1 bg-white rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl min-h-[450px]">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-500">Guardian Response Chat</span>
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               </div>
               
-              <div className="flex-1 p-5 overflow-y-auto space-y-4">
+              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-white custom-scrollbar">
                 {messages.map(m => (
                   <div key={m.id} className={`flex ${m.sender === 'User' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-4 rounded-2xl shadow-xl text-sm font-bold ${
-                      m.sender === 'User' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-900 rounded-tl-none'
+                    <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm text-sm font-bold ${
+                      m.sender === 'User' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-900 rounded-tl-none'
                     }`}>
+                      <p className="text-[8px] uppercase tracking-widest opacity-50 mb-1">{m.sender}</p>
                       <p>{m.text}</p>
                       <p className="text-[8px] opacity-30 mt-1 text-right">{m.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                     </div>
@@ -352,81 +355,93 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 bg-black/40 flex gap-2">
-                <input placeholder="Type message..." className="flex-1 bg-white/10 rounded-2xl p-4 text-white placeholder:text-white/30 outline-none border border-white/10 text-sm font-bold" value={chatInput} onChange={e => setChatInput(e.target.value)} />
-                <button className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-red-700 shadow-xl active:scale-90 transition-all"><i className="fas fa-paper-plane"></i></button>
+              <form onSubmit={handleSendMessage} className="p-4 bg-slate-50 flex gap-2 border-t border-slate-100">
+                <input placeholder="Type message..." className="flex-1 bg-white rounded-2xl p-4 text-slate-900 placeholder:text-slate-400 outline-none border border-slate-200 text-sm font-bold focus:border-blue-500" value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                <button type="submit" className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl active:scale-90 transition-all"><i className="fas fa-paper-plane"></i></button>
               </form>
             </div>
 
-            <button onClick={() => setIsEmergency(false)} className="w-full bg-white text-red-700 font-black py-5 rounded-3xl shadow-2xl uppercase tracking-widest active:scale-95">I'M SAFE NOW</button>
+            <button onClick={() => setIsEmergency(false)} className="w-full bg-white text-red-600 font-black py-5 rounded-3xl shadow-2xl uppercase tracking-widest active:scale-95 border-b-4 border-slate-200">I'M SAFE NOW</button>
           </div>
         ) : (
           <>
             {view === 'home' && (
               <div className="space-y-10 py-10 text-center animate-in fade-in duration-500">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tighter">Hi, {currentUser?.name}</h2>
-                  <p className="text-slate-500 font-bold mt-2">Safety monitoring is {isListening ? 'ACTIVE' : 'OFF'}</p>
+                  <h2 className="text-4xl font-black tracking-tighter text-slate-900">Hi, {currentUser?.name}</h2>
+                  <p className="text-slate-500 font-bold mt-2">Safety monitoring is <span className={isListening ? 'text-blue-600' : 'text-slate-400'}>{isListening ? 'ACTIVE' : 'OFF'}</span></p>
                 </div>
 
                 <div className="flex justify-center">
-                  <button onClick={triggerSOS} className="w-72 h-72 rounded-full bg-slate-800 border-[20px] border-slate-800/50 flex flex-col items-center justify-center shadow-2xl active:scale-95 group transition-all hover:border-red-600/20 relative">
+                  <button onClick={triggerSOS} className="w-72 h-72 rounded-full bg-white border-[20px] border-slate-100 flex flex-col items-center justify-center shadow-2xl active:scale-95 group transition-all hover:border-red-50 relative">
                     <i className="fas fa-bolt text-7xl text-red-600 mb-4 transition-transform group-hover:scale-110"></i>
-                    <span className="text-sm font-black text-slate-500 tracking-widest uppercase">Manual SOS</span>
+                    <span className="text-sm font-black text-slate-400 tracking-widest uppercase">Manual SOS</span>
                     {isListening && <div className="absolute inset-0 border-4 border-blue-500 rounded-full animate-ping opacity-20"></div>}
                   </button>
                 </div>
 
                 <div className="max-w-xs mx-auto space-y-4">
-                  <button onClick={() => setIsListening(!isListening)} className={`w-full p-6 rounded-3xl flex items-center justify-between border-2 transition-all ${isListening ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                  <button onClick={() => setIsListening(!isListening)} className={`w-full p-6 rounded-3xl flex items-center justify-between border-2 transition-all ${isListening ? 'bg-blue-600 border-blue-400 text-white shadow-blue-200' : 'bg-white border-slate-200 text-slate-500 shadow-sm'}`}>
                     <div className="flex items-center gap-3">
                       <i className={`fas ${isListening ? 'fa-microphone animate-pulse' : 'fa-microphone-slash'} text-xl`}></i>
                       <span className="font-black text-xs uppercase tracking-widest">{isListening ? 'Listening' : 'Voice Off'}</span>
                     </div>
-                    <div className={`w-10 h-6 rounded-full relative ${isListening ? 'bg-blue-400' : 'bg-slate-700'}`}>
-                      <div className={`absolute top-1 w-4 h-4 rounded-full transition-all bg-white ${isListening ? 'right-1' : 'left-1'}`}></div>
+                    <div className={`w-10 h-6 rounded-full relative ${isListening ? 'bg-blue-400' : 'bg-slate-200'}`}>
+                      <div className={`absolute top-1 w-4 h-4 rounded-full transition-all bg-white shadow-sm ${isListening ? 'right-1' : 'left-1'}`}></div>
                     </div>
                   </button>
-                  <p className="text-[10px] text-slate-600 font-bold italic">Trigger Phrase: "{currentUser?.secretPhrase}"</p>
+                  <p className="text-[10px] text-slate-400 font-bold italic">Trigger Phrase: "{currentUser?.secretPhrase}"</p>
                 </div>
               </div>
             )}
 
             {view === 'people' && (
               <div className="space-y-8 animate-in slide-in-from-right duration-500">
-                <h2 className="text-3xl font-black text-center">Guardian Circle</h2>
-                <form onSubmit={e => { e.preventDefault(); setMyPeople([...myPeople, { id: Date.now().toString(), name: gName, email: gEmail, phone: '' }]); setGName(''); setGEmail(''); }} className="bg-slate-800 p-8 rounded-3xl border border-slate-700 space-y-4 shadow-xl">
-                  <input required placeholder="Name" className="w-full p-4 bg-slate-900 border-2 border-transparent focus:border-blue-500 outline-none font-bold rounded-2xl" value={gName} onChange={e => setGName(e.target.value)} />
-                  <input required placeholder="Email" type="email" className="w-full p-4 bg-slate-900 border-2 border-transparent focus:border-blue-500 outline-none font-bold rounded-2xl" value={gEmail} onChange={e => setGEmail(e.target.value)} />
-                  <button className="w-full bg-blue-600 py-4 rounded-2xl font-bold uppercase tracking-widest text-sm shadow-xl">Add Guardian</button>
+                <h2 className="text-3xl font-black text-center text-slate-900">Guardian Circle</h2>
+                <form onSubmit={e => { e.preventDefault(); setMyPeople([...myPeople, { id: Date.now().toString(), name: gName, email: gEmail, phone: '' }]); setGName(''); setGEmail(''); }} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-xl">
+                  <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Add New Contact</h3>
+                  <input required placeholder="Name" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900" value={gName} onChange={e => setGName(e.target.value)} />
+                  <input required placeholder="Email" type="email" className="w-full p-4 bg-slate-50 border border-slate-100 focus:border-blue-500 outline-none font-bold rounded-2xl text-slate-900" value={gEmail} onChange={e => setGEmail(e.target.value)} />
+                  <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold uppercase tracking-widest text-sm shadow-xl active:scale-95 transition-all">Add Guardian</button>
                 </form>
 
                 <div className="space-y-4">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4">Saved Guardians</h3>
                   {myPeople.map(p => (
-                    <div key={p.id} className="bg-slate-800 p-6 rounded-3xl flex items-center justify-between border border-slate-700">
+                    <div key={p.id} className="bg-white p-6 rounded-3xl flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-xl font-bold">{p.name[0]}</div>
+                        <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-xl font-bold">{p.name[0]}</div>
                         <div>
-                          <h4 className="font-black leading-none">{p.name}</h4>
+                          <h4 className="font-black leading-none text-slate-900">{p.name}</h4>
                           <p className="text-xs text-slate-500 mt-1">{p.email}</p>
                         </div>
                       </div>
-                      <button onClick={() => setMyPeople(myPeople.filter(x => x.id !== p.id))} className="text-red-500 p-2"><i className="fas fa-trash"></i></button>
+                      <button onClick={() => setMyPeople(myPeople.filter(x => x.id !== p.id))} className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors"><i className="fas fa-trash"></i></button>
                     </div>
                   ))}
+                  {myPeople.length === 0 && (
+                    <div className="text-center py-10 text-slate-400 font-medium bg-white/50 rounded-3xl border-2 border-dashed border-slate-200">
+                      No guardians added yet.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {view === 'settings' && (
               <div className="space-y-8 animate-in slide-in-from-right duration-500">
-                <h2 className="text-3xl font-black text-center">Safety Setup</h2>
-                <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 space-y-8 shadow-xl text-center">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-blue-400 uppercase">Emergency Secret Phrase</label>
-                    <input className="w-full p-6 bg-slate-900 rounded-3xl text-3xl font-black text-center outline-none border-2 border-slate-700 focus:border-blue-500" value={currentUser?.secretPhrase} onChange={e => setCurrentUser(prev => prev ? {...prev, secretPhrase: e.target.value} : null)} />
+                <h2 className="text-3xl font-black text-center text-slate-900">Safety Setup</h2>
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 space-y-8 shadow-xl text-center">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Emergency Secret Phrase</label>
+                    <input className="w-full p-6 bg-slate-50 rounded-3xl text-3xl font-black text-center outline-none border border-slate-100 focus:border-blue-500 text-slate-900" value={currentUser?.secretPhrase} onChange={e => setCurrentUser(prev => prev ? {...prev, secretPhrase: e.target.value} : null)} />
+                    <p className="text-xs text-slate-400 font-medium">Say this phrase to trigger SOS instantly.</p>
                   </div>
-                  <button onClick={() => setView('home')} className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase tracking-widest shadow-2xl">Save Changes</button>
+                  <div className="pt-6 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Display Name</label>
+                    <input className="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-900 border border-slate-100 focus:border-blue-500 outline-none" value={currentUser?.name} onChange={e => setCurrentUser(prev => prev ? {...prev, name: e.target.value} : null)} />
+                  </div>
+                  <button onClick={() => setView('home')} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-2xl active:scale-95">Save Changes</button>
                 </div>
               </div>
             )}
@@ -435,20 +450,20 @@ const App: React.FC = () => {
       </main>
 
       {!isEmergency && (
-        <nav className="fixed bottom-0 left-0 right-0 p-6 bg-slate-900/90 backdrop-blur-2xl border-t border-slate-800 z-50">
+        <nav className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-slate-100 z-50">
           <div className="max-w-md mx-auto flex justify-around items-center">
-            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 transition-all ${view === 'home' ? 'text-blue-400 scale-110' : 'text-slate-500'}`}>
+            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 transition-all ${view === 'home' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
               <i className="fas fa-home text-2xl"></i>
               <span className="text-[10px] font-bold uppercase tracking-widest">Home</span>
             </button>
-            <button onClick={triggerSOS} className="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center -mt-12 border-8 border-slate-900 shadow-xl active:scale-90 transition-all">
+            <button onClick={triggerSOS} className="w-16 h-16 rounded-full bg-red-600 text-white flex items-center justify-center -mt-12 border-8 border-slate-50 shadow-xl active:scale-90 transition-all">
               <i className="fas fa-bolt text-2xl"></i>
             </button>
-            <button onClick={() => setView('people')} className={`flex flex-col items-center gap-1 transition-all ${view === 'people' ? 'text-blue-400 scale-110' : 'text-slate-500'}`}>
+            <button onClick={() => setView('people')} className={`flex flex-col items-center gap-1 transition-all ${view === 'people' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
               <i className="fas fa-user-group text-2xl"></i>
               <span className="text-[10px] font-bold uppercase tracking-widest">Circle</span>
             </button>
-            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-blue-400 scale-110' : 'text-slate-500'}`}>
+            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
               <i className="fas fa-gear text-2xl"></i>
               <span className="text-[10px] font-bold uppercase tracking-widest">Setup</span>
             </button>
